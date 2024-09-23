@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório Mensal de Anúncios</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome para ícones -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+            color: #343a40;
+            font-family: 'Arial', sans-serif;
+            scroll-behavior: smooth;
+        }
+        h1, h2, h3, h4 {
+            color: #4CAF50;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .table {
+            background-color: #ffffff;
+            margin-bottom: 30px;
+        }
+        .navbar {
+            background-color: #343a40;
+        }
+        .navbar a {
+            color: #ffffff !important;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .navbar a:hover {
+            color: #4CAF50 !important;
+        }
+        footer {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 14px;
+            color: #6c757d;
+        }
+        .tab-content {
+            margin-top: 30px;
+        }
+        .funnel-stage {
+            text-align: center;
+            padding: 20px;
+            border: 1px solid #4CAF50;
+            border-radius: 10px;
+            margin: 10px;
+            background-color: #4CAF50;
+            color: #ffffff;
+            font-size: 18px;
+        }
+        /* Estilo para formulários */
+        .form-section {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+        .form-section h2 {
+            color: #4CAF50;
+            margin-bottom: 20px;
+        }
+        .btn-submit {
+            font-size: 16px;
+            padding: 10px 20px;
+        }
+        /* Estilo para gráficos */
+        .chart-container {
+            position: relative;
+            margin: auto;
+            height: 400px;
+            width: 80%;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Navbar for slide navigation -->
+<nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+    <div class="container">
+        <a class="navbar-brand" href="#">Relatório Mensal</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" 
+            aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item active">
+                    <a class="nav-link" href="#desempenho" data-toggle="tab"><i class="fas fa-chart-line"></i> Desempenho Semanal</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#total" data-toggle="tab"><i class="fas fa-tachometer-alt"></i> Total de Métricas</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#funil" data-toggle="tab"><i class="fas fa-users"></i> Funil de Vendas</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#melhores" data-toggle="tab"><i class="fas fa-star"></i> Melhores Anúncios</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#cliques" data-toggle="tab"><i class="fas fa-map-marked-alt"></i> Cliques por Estado</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#roi" data-toggle="tab"><i class="fas fa-dollar-sign"></i> ROI e ROAS</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#inserir" data-toggle="tab"><i class="fas fa-plus-circle"></i> Inserir Dados</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#comparativos" data-toggle="tab"><i class="fas fa-chart-bar"></i> Comparativos de Meses</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="container" style="padding-top: 80px;">
+    <!-- Mensagem de Sucesso ou Erro -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="container mt-4">
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}" role="alert">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    
+    <!-- Abas de Conteúdo -->
+    <div class="tab-content">
+        <!-- Inserir Dados -->
+        <div id="inserir" class="tab-pane fade">
+            <div class="form-section">
+                <h2>Inserir Dados Semanais</h2>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h4>Facebook Ads</h4>
+                        <form method="POST" action="/insert_weekly">
+                            <input type="hidden" name="plataforma" value="Facebook Ads">
+                            <div class="form-group">
+                                <label>Semana</label>
+                                <input type="number" name="semana" class="form-control" required min="1" max="52" placeholder="Semana 1">
+                            </div>
+                            <div class="form-group">
+                                <label>Impressões</label>
+                                <input type="number" name="impressões" class="form-control" required placeholder="Número de Impressões">
+                            </div>
+                            <div class="form-group">
+                                <label>Cliques no link</label>
+                                <input type="number" name="cliques_no_link" class="form-control" required placeholder="Número de Cliques">
+                            </div>
+                            <div class="form-group">
+                                <label>Resultados</label>
+                                <input type="number" name="resultados" class="form-control" required placeholder="Número de Resultados">
+                            </div>
+                            <div class="form-group">
+                                <label>CTR (%)</label>
+                                <input type="number" step="0.01" name="ctr" class="form-control" required placeholder="CTR em %">
+                            </div>
+                            <div class="form-group">
+                                <label>Taxa de Conversão (%)</label>
+                                <input type="number" step="0.01" name="taxa_conversao" class="form-control" required placeholder="Taxa de Conversão em %">
+                            </div>
+                            <div class="form-group">
+                                <label>CPL (R$)</label>
+                                <input type="number" step="0.01" name="cpl" class="form-control" required placeholder="Custo por Lead">
+                            </div>
+                            <div class="form-group">
+                                <label>Valor Usado (R$)</label>
+                                <input type="number" step="0.01" name="valor_usado" class="form-control" required placeholder="Valor Usado em Reais">
+                            </div>
+                            <button type="submit" class="btn btn-success btn-submit"><i class="fas fa-save"></i> Salvar Dados</button>
+                        </form>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h4>Google Ads</h4>
+                        <form method="POST" action="/insert_weekly">
+                            <input type="hidden" name="plataforma" value="Google Ads">
+                            <div class="form-group">
+                                <label>Semana</label>
+                                <input type="number" name="semana" class="form-control" required min="1" max="52" placeholder="Semana 1">
+                            </div>
+                            <div class="form-group">
+                                <label>Impressões</label>
+                                <input type="number" name="impressões" class="form-control" required placeholder="Número de Impressões">
+                            </div>
+                            <div class="form-group">
+                                <label>Cliques no link</label>
+                                <input type="number" name="cliques_no_link" class="form-control" required placeholder="Número de Cliques">
+                            </div>
+                            <div class="form-group">
+                                <label>Resultados</label>
+                                <input type="number" name="resultados" class="form-control" required placeholder="Número de Resultados">
+                            </div>
+                            <div class="form-group">
+                                <label>CTR (%)</label>
+                                <input type="number" step="0.01" name="ctr" class="form-control" required placeholder="CTR em %">
+                            </div>
+                            <div class="form-group">
+                                <label>Taxa de Conversão (%)</label>
+                                <input type="number" step="0.01" name="taxa_conversao" class="form-control" required placeholder="Taxa de Conversão em %">
+                            </div>
+                            <div class="form-group">
+                                <label>CPL (R$)</label>
+                                <input type="number" step="0.01" name="cpl" class="form-control" required placeholder="Custo por Lead">
+                            </div>
+                            <div class="form-group">
+                                <label>Valor Usado (R$)</label>
+                                <input type="number" step="0.01" name="valor_usado" class="form-control" required placeholder="Valor Usado em Reais">
+                            </div>
+                            <button type="submit" class="btn btn-success btn-submit"><i class="fas fa-save"></i> Salvar Dados</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Slide 1: Desempenho Semanal -->
+        <div id="desempenho" class="tab-pane fade show active">
+            <h1 class="text-center">Desempenho Semanal</h1>
+            
+            <!-- Facebook Ads -->
+            <h2>Facebook Ads</h2>
+            <table class="table table-bordered">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Métricas</th>
+                        <th>Semana 1</th>
+                        <th>Semana 2</th>
+                        <th>Semana 3</th>
+                        <th>Semana 4</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Impressões</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Cliques no link</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Resultados</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>CTR (%)</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>CPL (R$)</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Valor Usado (R$)</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <!-- Google Ads -->
+            <h2>Google Ads</h2>
+            <table class="table table-bordered">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Métricas</th>
+                        <th>Semana 1</th>
+                        <th>Semana 2</th>
+                        <th>Semana 3</th>
+                        <th>Semana 4</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Impressões</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Cliques no link</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Resultados</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>CTR (%)</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>CPL (R$)</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Valor Usado (R$)</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Slide 2: Total de Métricas e Valor Gasto -->
+        <div id="total" class="tab-pane fade">
+            <h1 class="text-center">Total de Métricas e Valor Gasto</h1>
+            <table class="table table-bordered">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Métricas</th>
+                        <th>Facebook Ads</th>
+                        <th>Google Ads</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Total Impressões</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Total Cliques</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Total Resultados</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Total CTR (%)</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Total CPL (R$)</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Total Valor Usado (R$)</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Slide 3: Funil de Vendas -->
+        <div id="funil" class="tab-pane fade">
+            <h1 class="text-center">Funil de Vendas</h1>
+            <div class="row">
+                <div class="col-md-3 funnel-stage">
+                    <h3>Topo</h3>
+                    <p>Leads Frios: --</p>
+                </div>
+                <div class="col-md-3 funnel-stage">
+                    <h3>Atendidos</h3>
+                    <p>Atendidos: --</p>
+                </div>
+                <div class="col-md-3 funnel-stage">
+                    <h3>Oportunidades</h3>
+                    <p>Oportunidades: --</p>
+                </div>
+                <div class="col-md-3 funnel-stage">
+                    <h3>Conversões</h3>
+                    <p>Conversões: --</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Melhores Anúncios -->
+        <div id="melhores" class="tab-pane fade">
+            <h1 class="text-center">Melhores Anúncios (CTR)</h1>
+            <table class="table table-bordered">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Anúncio</th>
+                        <th>CTR (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Aumente sua PRODUTIVIDADE!</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Cadastre-se e fale conosco</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Com o KIT PLANTIO TORNITEC</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Para o grande e pequeno produtor!</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Cadastre-se e fale conosco (Turbomix)</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>KIT PLANTIO NA AGROLEITE!</td>
+                        <td>--</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="text-center mt-4">
+                <img src="https://i.ibb.co/FByXKbq/anuncios.png" alt="Melhores Anúncios" style="width: 100%; max-width: 800px; height: auto;">
+            </div>
+        </div>
+
+        <!-- Slide 5: Cliques por Estado -->
+        <div id="cliques" class="tab-pane fade">
+            <h1 class="text-center">Cliques por Estado</h1>
+            <table class="table table-bordered">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Estado</th>
+                        <th>Cliques</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Rio Grande do Sul</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Paraná</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Santa Catarina</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Minas Gerais</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Goiás</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>São Paulo</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Mato Grosso</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Tocantins</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Atlântico</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Maranhão</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Distrito Federal</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Mato Grosso do Sul</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Pará</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Alto Paraná Department</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Piauí</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Itapúa Department</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>Central Department</td>
+                        <td>--</td>
+                    </tr>
+                    <tr>
+                        <td>OUTROS</td>
+                        <td>--</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="text-center mt-4">
+                <!-- Gráfico de Cliques por Estado usando Chart.js -->
+                <canvas id="cliquesPorEstado" width="400" height="400"></canvas>
+            </div>
+            <p class="mt-4 text-center" style="font-size: 18px;">
+                O Rio Grande do Sul e o Paraná lideram em número de cliques, resultado da nossa participação em feiras nesses estados. Essa presença aumentou significativamente a interação do público local com nossos anúncios, indicando mercados prioritários para futuras ações.
+            </p>
+        </div>
+        
+        <!-- Slide 6: ROI e ROAS -->
+        <div id="roi" class="tab-pane fade">
+            <h1 class="text-center">Explicação do ROI e ROAS</h1>
+            <div class="row">
+                <div class="col-md-6">
+                    <h3>ROI Externo</h3>
+                    <p>Investimento: R$ --</p>
+                    <p>Retorno gerado: R$ --</p>
+                    <p>ROI = --%</p>
+                    <p>ROAS: R$ --</p>
+                    <p>Isso significa que para cada R$ 1 investido, gerou R$ -- em receita, e o retorno sobre o investimento total foi de --%.</p>
+                </div>
+                <div class="col-md-6">
+                    <h3>ROI Interno</h3>
+                    <p>Faturamento interno (receita): R$ --</p>
+                    <p>Investimento total (custo): R$ --</p>
+                    <p>ROI: --%</p>
+                    <p>ROAS: R$ --</p>
+                    <p>Isso significa que para cada R$ 1 investido, você gerou R$ -- em receita internamente, com um retorno sobre o investimento de --%.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Comparativos de Meses -->
+        <div id="comparativos" class="tab-pane fade">
+            <h1 class="text-center">Comparativos de Meses</h1>
+            <div class="chart-container">
+                <canvas id="comparativosChart"></canvas>
+            </div>
+            <p class="mt-4 text-center" style="font-size: 18px;">
+                Aqui você pode comparar os totais das métricas dos últimos meses com o mês atual para analisar tendências e desempenho.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Footer -->
+<footer>
+    <p>Relatório gerado em 21/09/2024.</p>
+</footer>
+
+<!-- Scripts -->
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Script para gráfico de Cliques por Estado -->
+<script>
+    var ctx = document.getElementById('cliquesPorEstado').getContext('2d');
+    var cliquesPorEstadoChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: [
+                'Rio Grande do Sul', 'Paraná', 'Santa Catarina', 'Minas Gerais', 'Goiás', 
+                'São Paulo', 'Mato Grosso', 'Tocantins', 'Atlântico', 'Maranhão', 
+                'Distrito Federal', 'Mato Grosso do Sul', 'Pará', 'Alto Paraná Department', 
+                'Piauí', 'Itapúa Department', 'Central Department', 'OUTROS'
+            ],
+            datasets: [{
+                data: [28788, 21854, 7365, 3749, 3319, 2985, 2672, 2420, 1796, 1775, 1192, 1104, 647, 584, 520, 485, 398, 0],
+                backgroundColor: [
+                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                    '#FF9F40', '#E7E9ED', '#36A2EB', '#FF6384', '#FFCE56',
+                    '#4BC0C0', '#9966FF', '#FF9F40', '#E7E9ED', '#36A2EB',
+                    '#FF6384', '#FFCE56', '#C9CBCF'
+                ],
+                hoverBackgroundColor: [
+                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                    '#FF9F40', '#E7E9ED', '#36A2EB', '#FF6384', '#FFCE56',
+                    '#4BC0C0', '#9966FF', '#FF9F40', '#E7E9ED', '#36A2EB',
+                    '#FF6384', '#FFCE56', '#C9CBCF'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+</script>
+
+<!-- Script para gráfico de Comparativos de Meses -->
+<script>
+    var ctxComparativos = document.getElementById('comparativosChart').getContext('2d');
+    var comparativosChart = new Chart(ctxComparativos, {
+        type: 'bar',
+        data: {
+            labels: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro'],
+            datasets: [
+                {
+                    label: 'Impressões',
+                    backgroundColor: '#36A2EB',
+                    data: [120000, 130000, 125000, 140000, 135000, 150000, 145000, 160000, 155000]
+                },
+                {
+                    label: 'Cliques',
+                    backgroundColor: '#FF6384',
+                    data: [30000, 32000, 31000, 35000, 34000, 37000, 36000, 40000, 39000]
+                },
+                {
+                    label: 'Resultados',
+                    backgroundColor: '#FFCE56',
+                    data: [500, 550, 530, 600, 580, 620, 610, 650, 640]
+                },
+                {
+                    label: 'CTR (%)',
+                    backgroundColor: '#4BC0C0',
+                    data: [2.5, 2.6, 2.55, 2.8, 2.75, 2.9, 2.85, 3.0, 2.95]
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            title: {
+                display: true,
+                text: 'Comparativo de Métricas Mensais'
+            },
+            tooltips: {
+                mode: 'index',
+                intersect: false,
+            },
+            scales: {
+                yAxes: [{
+                    ticks: {
+                        beginAtZero: true
+                    },
+                    scaleLabel: {
+                        display: true,
+                        labelString: 'Valores'
+                    }
+                }],
+                xAxes: [{
+                    scaleLabel: {
+                        display: true,
+                        labelString: 'Meses'
+                    }
+                }]
+            }
+        }
+    });
+</script>
+
+</body>
+</html>

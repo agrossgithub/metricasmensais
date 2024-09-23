@@ -1,6 +1,14 @@
+<<<<<<< HEAD
 numpy==1.23.5
 pandas==1.5.3
 dash==2.12.0
 dash-bootstrap-components==1.4.1
 plotly==5.15.0
 Babel==2.12.1
+=======
+dash==2.12.0
+dash-bootstrap-components==1.4.1
+plotly==5.15.0
+pandas==1.5.3
+babel==2.12.1
+>>>>>>> dc4880f (Primeiro commit: adicionando meu Dash App)

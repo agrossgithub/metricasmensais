@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram Data Fetch</title>
+    <script>
+        async function getInstagramData() {
+            const username = document.getElementById('username').value;
+            
+            // Fazendo a requisição para o backend
+            const response = await fetch(`http://localhost:5000/api/instagram?username=${username}`);
+            const data = await response.json();
+            
+            // Exibindo os dados recebidos
+            if (response.ok) {
+                document.getElementById('result').innerHTML = `
+                    <h3>Perfil: ${data.username}</h3>
+                    <p><strong>Seguidores:</strong> ${data.followers}</p>
+                    <p><strong>Postagens:</strong> ${data.posts}</p>
+                `;
+            } else {
+                document.getElementById('result').innerHTML = `<p>${data.message}</p>`;
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>Instagram Profile Data</h1>
+    <input type="text" id="username" placeholder="Digite o nome de usuário do Instagram">
+    <button onclick="getInstagramData()">Buscar Dados</button>
+
+    <div id="result"></div>
+</body>
+</html>
