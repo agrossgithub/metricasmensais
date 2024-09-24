@@ -56,47 +56,37 @@ def formatar_linha(row):
     return row
 
 df_desempenho = df_desempenho.apply(formatar_linha, axis=1)
-# Incluindo o CSS diretamente no layout com a tag <style>
 app.layout = html.Div([
     html.Div([
         dcc.Location(id='url', refresh=False),
         html.Div(id='page-content', className="container", style={'position': 'relative', 'padding': '20px'}),
     ]),
     html.Style('''
-        /* Estilo dos botões de navegação como setas */
         .nav-button {
-            background-color: transparent; /* Fundo transparente */
-            border: none; /* Remove a borda */
-            color: #12723D; /* Cor da seta */
-            cursor: pointer; /* Cursor de mão ao passar o mouse */
-            position: fixed; /* Posicionamento fixo */
-            top: 50%; /* Centralizado verticalmente */
-            transform: translateY(-50%); /* Ajuste para centralização */
-            font-size: 30px; /* Tamanho do ícone */
-            z-index: 1000; /* Fica acima de outros elementos */
-            transition: color 0.3s, transform 0.2s; /* Transições suaves */
+            background-color: transparent;
+            border: none;
+            color: #12723D;
+            cursor: pointer;
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 30px;
+            z-index: 1000;
+            transition: color 0.3s, transform 0.2s;
         }
-
-        /* Botão esquerdo */
         .nav-button-left {
-            left: 20px; /* Espaço da borda esquerda */
+            left: 20px;
         }
-
-        /* Botão direito */
         .nav-button-right {
-            right: 20px; /* Espaço da borda direita */
+            right: 20px;
         }
-
-        /* Efeito de hover */
         .nav-button:hover {
-            color: #0E5A31; /* Escurece a cor da seta ao passar o mouse */
-            transform: translateY(-50%) scale(1.2); /* Aumenta o tamanho da seta */
+            color: #0E5A31;
+            transform: translateY(-50%) scale(1.2);
         }
-
-        # Efeito de clique
         .nav-button:active {
-            transform: translateY(-50%) scale(1); /* Retorna ao tamanho original */
-            color: #0E5A31; /* Mantém a cor escura */
+            transform: translateY(-50%) scale(1);
+            color: #0E5A31;
         }
     ''')
 ])
