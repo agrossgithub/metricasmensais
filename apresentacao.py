@@ -56,41 +56,7 @@ def formatar_linha(row):
     return row
 
 df_desempenho = df_desempenho.apply(formatar_linha, axis=1)
-app.layout = html.Div([
-    html.Div([
-        dcc.Location(id='url', refresh=False),
-        html.Div(id='page-content', className="container", style={'position': 'relative', 'padding': '20px'}),
-    ]),
-    html.Style('''
-        .nav-button {
-            background-color: transparent;
-            border: none;
-            color: #12723D;
-            cursor: pointer;
-            position: fixed;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 30px;
-            z-index: 1000;
-            transition: color 0.3s, transform 0.2s;
-        }
-        .nav-button-left {
-            left: 20px;
-        }
-        .nav-button-right {
-            right: 20px;
-        }
-        .nav-button:hover {
-            color: #0E5A31;
-            transform: translateY(-50%) scale(1.2);
-        }
-        .nav-button:active {
-            transform: translateY(-50%) scale(1);
-            color: #0E5A31;
-        }
-    ''')
-])
-# Dados de comparação entre todos os meses do ano (Janeiro a Dezembro)
+
 dados_comparacao = {
     'Métrica': ['Impressões', 'Cliques no link', 'Resultados', 'CTR (%)', 'CPL (R$)'],
     'Facebook Ads - Janeiro': [1500000, 20000, 500, 1.33, 40.00],
