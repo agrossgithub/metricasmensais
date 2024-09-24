@@ -56,7 +56,47 @@ def formatar_linha(row):
     return row
 
 df_desempenho = df_desempenho.apply(formatar_linha, axis=1)
+# Incluindo o CSS diretamente no layout usando html.Style
+app.layout = html.Div([
+    html.Style('''
+        /* Estilo dos botões de navegação como setas */
+        .nav-button {
+            background-color: transparent; /* Fundo transparente */
+            border: none; /* Remove a borda */
+            color: #12723D; /* Cor da seta */
+            cursor: pointer; /* Cursor de mão ao passar o mouse */
+            position: fixed; /* Posicionamento fixo */
+            top: 50%; /* Centralizado verticalmente */
+            transform: translateY(-50%); /* Ajuste para centralização */
+            font-size: 30px; /* Tamanho do ícone */
+            z-index: 1000; /* Fica acima de outros elementos */
+            transition: color 0.3s, transform 0.2s; /* Transições suaves */
+        }
 
+        /* Botão esquerdo */
+        .nav-button-left {
+            left: 20px; /* Espaço da borda esquerda */
+        }
+
+        /* Botão direito */
+        .nav-button-right {
+            right: 20px; /* Espaço da borda direita */
+        }
+
+        /* Efeito de hover */
+        .nav-button:hover {
+            color: #0E5A31; /* Escurece a cor da seta ao passar o mouse */
+            transform: translateY(-50%) scale(1.2); /* Aumenta o tamanho da seta */
+        }
+
+        /* Efeito de clique */
+        .nav-button:active {
+            transform: translateY(-50%) scale(1); /* Retorna ao tamanho original */
+            color: #0E5A31; /* Mantém a cor escura */
+        }
+    '''),
+    # Aqui segue o resto do seu layout e componentes
+])
 # Dados de comparação entre todos os meses do ano (Janeiro a Dezembro)
 dados_comparacao = {
     'Métrica': ['Impressões', 'Cliques no link', 'Resultados', 'CTR (%)', 'CPL (R$)'],
