@@ -125,21 +125,28 @@ df_estados = pd.DataFrame(dados_estados)
 
 dados_produtos = {
     'Produto': ['Kit Plantio', 'Turbo Mix', 'Vollverini', 'Best Mix', 'Nitro Mix'],
-    'Valor Investido (R$)': [10845.15, 5842.36, 4621.99, 1260.09, 0],
+    'Valor Investido (R$)': [10845.15, 5842.36, 4621.99, 1260.09, 1.00],
     'Retorno (R$)': [1655659.44, 0, 816725.00, 0, 0]
 }
 
 # Criando o DataFrame a partir do dicionário
 df_produtos = pd.DataFrame(dados_produtos)
 
-# Calcular ROI por produto
-df_produtos['ROI (%)'] = ((df_produtos['Retorno (R$)'] - df_produtos['Valor Investido (R$)']) / df_produtos['Valor Investido (R$)']) * 100
+# Calcular ROI por produto, com tratamento para valores investidos iguais a 0
+df_produtos['ROI (%)'] = df_produtos.apply(
+    lambda row: ((row['Retorno (R$)'] - row['Valor Investido (R$)']) / row['Valor Investido (R$)']) * 100 if row['Valor Investido (R$)'] != 0 else -100.0,
+    axis=1
+)
 
 # Função para formatar valores monetários
 def formatar_valores(df):
-    df['Valor Investido (R$)'] = df['Valor Investido (R$)'].apply(lambda x: f'R$ {x:,.2f}')
-    df['Retorno (R$)'] = df['Retorno (R$)'].apply(lambda x: f'R$ {x:,.2f}')
-    df['ROI (%)'] = df['ROI (%)'].apply(lambda x: f'{x:.2f}%')
+    # Formatar colunas de valores numéricos para moeda
+    df['Valor Investido (R$)'] = df['Valor Investido (R$)'].apply(lambda x: f'R$ {x:,.2f}' if isinstance(x, (int, float)) else x)
+    df['Retorno (R$)'] = df['Retorno (R$)'].apply(lambda x: f'R$ {x:,.2f}' if isinstance(x, (int, float)) else x)
+    
+    # Formatar ROI, garantindo que valores não formatados sejam convertidos
+    df['ROI (%)'] = df['ROI (%)'].apply(lambda x: f'{float(x):.2f}%' if isinstance(x, (int, float)) else x)
+    
     return df
 
 # Aplicando a formatação de valores monetários
@@ -592,7 +599,7 @@ page_7_layout = html.Div([
             id='grafico-funil',
             figure=criar_funil_horizontal(pd.DataFrame({
                 'Etapa': ['Leads Frios', 'Atendidos', 'Oportunidades', 'Conversões'],
-                'Quantidade': [1000, 600, 300, 150]
+                'Quantidade': [1371, 635, 100, 61]
             }))
         )
     ], style={'height': '400px'}),
@@ -711,3 +718,4 @@ def atualizar_funil(pathname):
 # Rodar o servidor com host='0.0.0.0' para permitir conexões externas
 if __name__ == '__main__':
     app.run_server(debug=False, host='0.0.0.0', port=8050)
+
