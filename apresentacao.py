@@ -56,8 +56,12 @@ def formatar_linha(row):
     return row
 
 df_desempenho = df_desempenho.apply(formatar_linha, axis=1)
-# Incluindo o CSS diretamente no layout usando html.Style
+# Incluindo o CSS diretamente no layout com a tag <style>
 app.layout = html.Div([
+    html.Div([
+        dcc.Location(id='url', refresh=False),
+        html.Div(id='page-content', className="container", style={'position': 'relative', 'padding': '20px'}),
+    ]),
     html.Style('''
         /* Estilo dos botões de navegação como setas */
         .nav-button {
@@ -89,13 +93,12 @@ app.layout = html.Div([
             transform: translateY(-50%) scale(1.2); /* Aumenta o tamanho da seta */
         }
 
-        /* Efeito de clique */
+        # Efeito de clique
         .nav-button:active {
             transform: translateY(-50%) scale(1); /* Retorna ao tamanho original */
             color: #0E5A31; /* Mantém a cor escura */
         }
-    '''),
-    # Aqui segue o resto do seu layout e componentes
+    ''')
 ])
 # Dados de comparação entre todos os meses do ano (Janeiro a Dezembro)
 dados_comparacao = {
