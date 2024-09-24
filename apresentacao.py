@@ -288,11 +288,35 @@ app.layout = html.Div([
 def botoes_navegacao(prev_href, next_href):
     return html.Div([
         dcc.Link(
-            html.I(className='fas fa-arrow-left nav-button nav-button-left'),
+            html.I(className='fas fa-arrow-left', style={
+                'background-color': 'transparent',
+                'border': 'none',
+                'color': '#12723D',  # Verde
+                'cursor': 'pointer',
+                'position': 'fixed',
+                'top': '50%',
+                'left': '20px',  # Botão esquerdo
+                'transform': 'translateY(-50%)',
+                'font-size': '30px',
+                'z-index': '1000',
+                'transition': 'color 0.3s, transform 0.2s'
+            }),
             href=prev_href
         ),
         dcc.Link(
-            html.I(className='fas fa-arrow-right nav-button nav-button-right'),
+            html.I(className='fas fa-arrow-right', style={
+                'background-color': 'transparent',
+                'border': 'none',
+                'color': '#12723D',  # Verde
+                'cursor': 'pointer',
+                'position': 'fixed',
+                'top': '50%',
+                'right': '20px',  # Botão direito
+                'transform': 'translateY(-50%)',
+                'font-size': '30px',
+                'z-index': '1000',
+                'transition': 'color 0.3s, transform 0.2s'
+            }),
             href=next_href
         )
     ])
