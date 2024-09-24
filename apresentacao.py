@@ -1,12 +1,12 @@
 import dash
-from dash import dcc, html, Input, Output, State
+from dash import dcc, html, Input, Output
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
 
 # Lista de estilos externos incluindo Montserrat via Google Fonts e Font Awesome para ícones
 external_stylesheets = [
-    dbc.themes.BOOTSTRAP,  # Usando o tema Bootstrap
+    dbc.themes.DARKLY,  # Usando o tema Darkly para um fundo escuro
     'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap',  # Fonte Montserrat
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css',  # Font Awesome para ícones
 ]
@@ -16,8 +16,9 @@ app = dash.Dash(__name__, external_stylesheets=external_stylesheets, suppress_ca
 server = app.server  # Necessário para implantação e para o Gunicorn
 
 # Definir esquema de cores da Agross do Brasil
-primary_color = '#12723D'  # Verde oficial
-secondary_color = '#FFFFFF'  # Branco
+primary_color = '#00FF7F'  # Verde fluorescente para títulos
+secondary_color = '#343a40'  # Cor secundária ajustada para fundo escuro
+accent_color = '#212529'  # Cor de destaque para seções
 
 # Função para salvar os dados atualizados em CSV
 def salvar_dados(df):
@@ -29,14 +30,14 @@ dados_desempenho = {
     'Facebook Ads': [3551018, 49775, 1371, 1.72, 41.56, 44717.89],
     'Google Ads': [274854, 21898, 300, 6.92, 49.85, 9452.34]
 }
-df_desempenho = pd.DataFrame(dados_desempenho)
+df_desempenho_original = pd.DataFrame(dados_desempenho)
 
 # Calcular o total de gastos
-total_facebook_spend = df_desempenho[df_desempenho['Métrica'] == 'Valor usado (R$)']['Facebook Ads'].values[0]
-total_google_spend = df_desempenho[df_desempenho['Métrica'] == 'Valor usado (R$)']['Google Ads'].values[0]
+total_facebook_spend = df_desempenho_original[df_desempenho_original['Métrica'] == 'Valor usado (R$)']['Facebook Ads'].values[0]
+total_google_spend = df_desempenho_original[df_desempenho_original['Métrica'] == 'Valor usado (R$)']['Google Ads'].values[0]
 total_spend = total_facebook_spend + total_google_spend
 
-# Função para formatar os valores conforme a métrica
+# Função para formatar os valores conforme a métrica para as tabelas
 def formatar_valor(metrica, valor):
     if metrica in ['Impressões', 'Cliques no link', 'Resultados']:
         return f"{int(valor):,}".replace(",", ".")
@@ -47,7 +48,7 @@ def formatar_valor(metrica, valor):
     else:
         return valor
 
-# Aplicar a formatação aos valores do DataFrame
+# Aplicar a formatação aos valores do DataFrame para as tabelas
 def formatar_linha(row):
     metrica = row['Métrica']
     for col in ['Facebook Ads', 'Google Ads']:
@@ -55,6 +56,7 @@ def formatar_linha(row):
         row[col] = formatar_valor(metrica, valor)
     return row
 
+df_desempenho = df_desempenho_original.copy()
 df_desempenho = df_desempenho.apply(formatar_linha, axis=1)
 
 # Dados de comparação entre todos os meses do ano (Janeiro a Dezembro)
@@ -87,6 +89,7 @@ dados_comparacao = {
 }
 
 df_comparacao = pd.DataFrame(dados_comparacao)
+
 # Dados dos melhores anúncios
 melhores_anuncios = {
     'Anúncio': [
@@ -122,7 +125,6 @@ dados_estados['Cliques'][-1] = cliques_outros
 
 df_estados = pd.DataFrame(dados_estados)
 
-
 dados_produtos = {
     'Produto': ['Kit Plantio', 'Turbo Mix', 'Vollverini', 'Best Mix', 'Nitro Mix'],
     'Valor Investido (R$)': [10845.15, 5842.36, 4621.99, 1260.09, 1.00],
@@ -130,36 +132,36 @@ dados_produtos = {
 }
 
 # Criando o DataFrame a partir do dicionário
-df_produtos = pd.DataFrame(dados_produtos)
+df_produtos_original = pd.DataFrame(dados_produtos)
 
 # Calcular ROI por produto, com tratamento para valores investidos iguais a 0
-df_produtos['ROI (%)'] = df_produtos.apply(
+df_produtos_original['ROI (%)'] = df_produtos_original.apply(
     lambda row: ((row['Retorno (R$)'] - row['Valor Investido (R$)']) / row['Valor Investido (R$)']) * 100 if row['Valor Investido (R$)'] != 0 else -100.0,
     axis=1
 )
 
-# Função para formatar valores monetários
+# Função para formatar valores monetários para as tabelas
 def formatar_valores(df):
     # Formatar colunas de valores numéricos para moeda
-    df['Valor Investido (R$)'] = df['Valor Investido (R$)'].apply(lambda x: f'R$ {x:,.2f}' if isinstance(x, (int, float)) else x)
-    df['Retorno (R$)'] = df['Retorno (R$)'].apply(lambda x: f'R$ {x:,.2f}' if isinstance(x, (int, float)) else x)
+    df_formatado = df.copy()
+    df_formatado['Valor Investido (R$)'] = df_formatado['Valor Investido (R$)'].apply(
+        lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if isinstance(x, (int, float)) else x
+    )
+    df_formatado['Retorno (R$)'] = df_formatado['Retorno (R$)'].apply(
+        lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if isinstance(x, (int, float)) else x
+    )
     
     # Formatar ROI, garantindo que valores não formatados sejam convertidos
-    df['ROI (%)'] = df['ROI (%)'].apply(lambda x: f'{float(x):.2f}%' if isinstance(x, (int, float)) else x)
+    df_formatado['ROI (%)'] = df_formatado['ROI (%)'].apply(
+        lambda x: f"{float(x):.2f}%".replace(".", ",") if isinstance(x, (int, float)) else x
+    )
     
-    return df
+    return df_formatado
 
 # Aplicando a formatação de valores monetários
-df_produtos = formatar_valores(df_produtos)
+df_produtos = formatar_valores(df_produtos_original)
 
-
-df_produtos = pd.DataFrame(dados_produtos)
-
-# Calcular ROI por produto
-df_produtos['ROI (%)'] = ((df_produtos['Retorno (R$)'] - df_produtos['Valor Investido (R$)']) / df_produtos['Valor Investido (R$)']) * 100
-
-
-# Função para gerar a tabela de desempenho com estilos aprimorados
+# Função para gerar a tabela com estilos aprimorados
 def gerar_tabela(df):
     return dbc.Table.from_dataframe(
         df, striped=True, bordered=True, hover=True, 
@@ -168,7 +170,7 @@ def gerar_tabela(df):
             'font-size': '18px', 
             'text-align': 'center', 
             'background-color': secondary_color,
-            'color': '#000000'
+            'color': '#FFFFFF'  # Texto claro para contraste
         }
     )
 
@@ -207,13 +209,16 @@ def criar_grafico(metric_name, titulo, plataformas, meses):
         text='Valor'
     )
     
-    # Ajustar o eixo Y para dar espaço aos rótulos no topo das barras
+    # Calcular o máximo valor para ajustar o eixo Y
     max_valor = df_melted['Valor'].max()
-    fig.update_yaxes(range=[0, max_valor * 1.2])
+    y_max = max_valor * 1.1  # 10% acima do máximo valor
+    
+    # Ajustar o eixo Y para dar espaço aos rótulos no topo das barras
+    fig.update_yaxes(range=[0, y_max], tickformat=',.0f')
     
     # Atualizar o layout para melhorar a legibilidade dos rótulos
     fig.update_traces(
-        texttemplate='%{text}', 
+        texttemplate='R$ %{y:,.2f}',
         textposition='outside',
         cliponaxis=False
     )
@@ -222,17 +227,18 @@ def criar_grafico(metric_name, titulo, plataformas, meses):
         uniformtext_minsize=8, 
         uniformtext_mode='hide',
         xaxis_tickangle=-45,
-        yaxis_title=None,
-        xaxis_title=None,
+        yaxis_title='Valor (R$)',  # Garantir que o título do eixo Y esteja correto
+        xaxis_title='Campanha',
         legend_title_text='Plataforma',
         margin=dict(t=80),
         plot_bgcolor=secondary_color,
         paper_bgcolor=secondary_color,
-        font=dict(family="Montserrat, sans-serif", size=12, color="#000000")
+        font=dict(family="Montserrat, sans-serif", size=12, color="#FFFFFF")  # Texto claro
     )
     
     return fig
-# Função para criar o Funil de Vendas Horizontal
+
+# Função para criar o Funil de Vendas Horizontal (removendo "Oportunidades")
 def criar_funil_horizontal(df):
     # Ordenar as etapas do funil
     df = df[::-1]  # Inverter para que Leads Frios fiquem na parte superior
@@ -260,8 +266,12 @@ def criar_funil_horizontal(df):
         margin=dict(l=100, r=100, t=50, b=50)
     )
 
-    # Adicionar título
-    fig.update_layout(title_text='Funil de Vendas Horizontal', title_x=0.5)
+    # Adicionar título com cor fluorescente
+    fig.update_layout(
+        title_text='Funil de Vendas Horizontal', 
+        title_x=0.5,
+        font=dict(family="Montserrat, sans-serif", size=12, color="#FFFFFF")  # Texto claro
+    )
 
     # Ajustar o layout para melhor aparência
     fig.update_traces(
@@ -273,9 +283,17 @@ def criar_funil_horizontal(df):
     return fig
 
 # Função para criar o Gráfico de Investimento e Retorno por Produto
-def criar_grafico_produtos(df):
+def criar_grafico_produtos(df_original):
+    # Utilizar o dataframe original (não formatado) para os cálculos
+    df_plot = df_original.copy()
+    
+    # Calcular o máximo valor para ajustar o eixo Y
+    max_val = df_plot[['Valor Investido (R$)', 'Retorno (R$)']].max().max()
+    y_max = max_val * 1.1  # 10% acima do máximo valor
+
+    # Criar o gráfico usando o dataframe original
     fig = px.bar(
-        df,
+        df_plot,
         x='Produto',
         y=['Valor Investido (R$)', 'Retorno (R$)'],
         barmode='group',
@@ -288,18 +306,25 @@ def criar_grafico_produtos(df):
     fig.update_layout(
         xaxis_title='Produto',
         yaxis_title='Valor (R$)',
+        yaxis=dict(range=[0, y_max], tickformat=',.0f'),  # Configuração explícita do eixo Y
         plot_bgcolor=secondary_color,
         paper_bgcolor=secondary_color,
         legend_title_text='Tipo',
         title_x=0.5,
         margin=dict(l=50, r=50, t=50, b=50),
-        font=dict(family="Montserrat, sans-serif", size=12, color="#000000")
+        font=dict(family="Montserrat, sans-serif", size=12, color="#FFFFFF")  # Texto claro
     )
 
     # Adicionar valores nas barras
     fig.update_traces(
-        texttemplate='%{y:.2f}',
+        texttemplate='R$ %{y:,.2f}',
         textposition='outside'
+    )
+
+    # Remover qualquer anotação ou título extra que possa estar causando "1.0"
+    fig.update_layout(
+        annotations=[],
+        title={'text': 'Investimento vs Retorno por Produto', 'x':0.5, 'y':0.95, 'xanchor': 'center', 'yanchor': 'top', 'font': {'color': primary_color}}
     )
 
     return fig
@@ -307,107 +332,137 @@ def criar_grafico_produtos(df):
 # Layout da aplicação com design aprimorado e espaço para botões de navegação
 app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
-    html.Div(id='page-content', className="container", style={'position': 'relative', 'padding': '20px'})
-], style={'backgroundColor': secondary_color, 'padding': '50px', 'font-family': 'Montserrat, sans-serif'})
+    dbc.Container(id='page-content', fluid=True, className="py-4")
+], style={'backgroundColor': accent_color, 'font-family': 'Montserrat, sans-serif', 'color': '#FFFFFF'})
 
 # Função para criar os botões de navegação fixos nas laterais com classe CSS
 def botoes_navegacao(prev_href, next_href):
     return html.Div([
-        dcc.Link(
-            html.I(className='fas fa-arrow-left', style={
-                'background-color': 'transparent',
-                'border': 'none',
-                'color': '#12723D',  # Verde
-                'cursor': 'pointer',
+        dbc.Button(
+            [html.I(className='fas fa-arrow-left'), " Voltar"],
+            href=prev_href,
+            color="success",  # Verde fluorescente
+            className="nav-button-left",
+            style={
                 'position': 'fixed',
-                'top': '50%',
-                'left': '20px',  # Botão esquerdo
+                'top': '60%',  # Ajustado para ficar um pouco mais abaixo
+                'left': '20px',
                 'transform': 'translateY(-50%)',
-                'font-size': '30px',
-                'z-index': '1000',
-                'transition': 'color 0.3s, transform 0.2s'
-            }),
-            href=prev_href
+                'zIndex': '1000',
+                'display': 'flex',
+                'alignItems': 'center',
+                'padding': '10px 20px',
+                'font-size': '16px',
+                'border-radius': '50px',  # Botões arredondados
+                'box-shadow': '0 4px 6px rgba(0,0,0,0.1)'  # Sombra
+            }
         ),
-        dcc.Link(
-            html.I(className='fas fa-arrow-right', style={
-                'background-color': 'transparent',
-                'border': 'none',
-                'color': '#12723D',  # Verde
-                'cursor': 'pointer',
+        dbc.Button(
+            ["Avançar ", html.I(className='fas fa-arrow-right')],
+            href=next_href,
+            color="success",  # Verde fluorescente
+            className="nav-button-right",
+            style={
                 'position': 'fixed',
-                'top': '50%',
-                'right': '20px',  # Botão direito
+                'top': '60%',  # Ajustado para ficar um pouco mais abaixo
+                'right': '20px',
                 'transform': 'translateY(-50%)',
-                'font-size': '30px',
-                'z-index': '1000',
-                'transition': 'color 0.3s, transform 0.2s'
-            }),
-            href=next_href
+                'zIndex': '1000',
+                'display': 'flex',
+                'alignItems': 'center',
+                'padding': '10px 20px',
+                'font-size': '16px',
+                'border-radius': '50px',  # Botões arredondados
+                'box-shadow': '0 4px 6px rgba(0,0,0,0.1)'  # Sombra
+            }
         )
     ])
 
 # Slide 1: Capa com o Logo da Agross
-page_1_layout = html.Div([
-    # Logo da Agross
-    html.Div([
-        html.Img(
-            src="https://i.ibb.co/VYvnyGg/logo-agross.png",  # Substitua pelo link direto da imagem do logo
-            style={
-                'width': '300px',  # Ajuste o tamanho conforme necessário
-                'height': 'auto',
-                'display': 'block',
-                'margin-left': 'auto',
-                'margin-right': 'auto'
-            }
-        )
-    ], style={'margin-top': '100px'}),
+page_1_layout = dbc.Container([
+    dbc.Row([
+        dbc.Col([
+            html.Img(
+                src="https://i.ibb.co/jf2b0g7/AGROSS-texto-versaofinal.png",  # Substitua pelo link direto da imagem do logo
+                style={
+                    'width': '600px',  # Ajuste o tamanho conforme necessário
+                    'height': 'auto',
+                    'display': 'block',
+                    'margin-left': 'auto',
+                    'margin-right': 'auto'
+                }
+            )
+        ], width=12, className="text-center")
+    ], className="my-5"),
     
-    # Título da Apresentação
-    html.Div([
-        html.H1("Relatório Mensal de Desempenho", className="text-center", 
-                style={'font-size': '48px', 'font-weight': '700', 'color': primary_color, 'margin-top': '50px'})
-    ]),
+    dbc.Row([
+        dbc.Col([
+            html.H1("Relatório Mensal de Desempenho", className="text-center", 
+                    style={'font-size': '48px', 'font-weight': '700', 'color': primary_color})
+        ], width=12)
+    ], className="my-4"),
     
     botoes_navegacao(prev_href='#', next_href='/page-2')
-], style={'color': '#000000', 'font-family': 'Montserrat, sans-serif', 'height': '100vh', 'background-color': secondary_color})
+], fluid=True, style={'height': '100vh', 'background-color': secondary_color})
 
 # Slide 2: Desempenho de Facebook e Google Ads com Total Investido
-page_2_layout = html.Div([
-    html.H1("Slide 2: Desempenho de Facebook e Google Ads", className="text-center", 
-            style={'font-size': '36px', 'font-weight': '700', 'color': primary_color}),
+page_2_layout = dbc.Container([
+    dbc.Row([
+        dbc.Col([
+            html.H1("Desempenho de Facebook e Google Ads", className="text-center", 
+                    style={'font-size': '36px', 'font-weight': '700', 'color': primary_color})
+        ], width=12)
+    ], className="my-4"),
     
-    # Tabela de desempenho
-    html.Div([
-        gerar_tabela(df_desempenho)
-    ], style={'margin-top': '30px'}),
-
-    # Total gasto no Facebook Ads, Google Ads e o Total Investido
-    html.Div([
-        html.H3(f"Total gasto no Facebook Ads: {formatar_valor('Valor usado (R$)', total_facebook_spend)}", 
-                className="text-center", style={'font-weight': '700', 'color': primary_color, 'margin-top': '20px'}),
-        html.H3(f"Total gasto no Google Ads: {formatar_valor('Valor usado (R$)', total_google_spend)}", 
-                className="text-center", style={'font-weight': '700', 'color': primary_color, 'margin-top': '10px'}),
-        html.H3(f"Total Investido: {formatar_valor('Valor usado (R$)', total_spend)}", 
-                className="text-center", style={'font-weight': '700', 'color': primary_color, 'margin-top': '10px'})
-    ], style={'margin-top': '30px'}),
-
-    # Botões de navegação
+    dbc.Row([
+        dbc.Col([
+            gerar_tabela(df_desempenho)
+        ], width=12)
+    ], className="my-4"),
+    
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardBody([
+                    html.H5("Total gasto no Facebook Ads", className="card-title"),
+                    html.P(formatar_valor('Valor usado (R$)', total_facebook_spend), className="card-text")
+                ])
+            ], color="success", inverse=True)
+        ], md=4),
+        dbc.Col([
+            dbc.Card([
+                dbc.CardBody([
+                    html.H5("Total gasto no Google Ads", className="card-title"),
+                    html.P(formatar_valor('Valor usado (R$)', total_google_spend), className="card-text")
+                ])
+            ], color="danger", inverse=True)
+        ], md=4),
+        dbc.Col([
+            dbc.Card([
+                dbc.CardBody([
+                    html.H5("Total Investido", className="card-title"),
+                    html.P(formatar_valor('Valor usado (R$)', total_spend), className="card-text")
+                ])
+            ], color="info", inverse=True)
+        ], md=4)
+    ], className="my-4"),
+    
     botoes_navegacao(prev_href='/page-1', next_href='/page-3')
-
-], style={'color': '#000000', 'font-family': 'Montserrat, sans-serif'})
-
+], fluid=True, style={'background-color': secondary_color})
 
 # Slide 3: Comparação de Todos os Meses (Jan-Dez)
-page_3_layout = html.Div([
-    html.H1("Slide 3: Comparação de Todos os Meses", className="text-center", 
-            style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'}),
+page_3_layout = dbc.Container([
+    dbc.Row([
+        dbc.Col([
+            html.H1("Comparação de Todos os Meses", className="text-center", 
+                    style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'})
+        ], width=12)
+    ], className="my-4"),
     
-    # Filtros centralizados no início do slide
-    html.Div([
-        dbc.Row([
-            dbc.Col([
-                html.Label('Selecionar Plataforma:', style={'font-weight': '700', 'margin-right': '10px', 'font-size': '20px'}),
+    dbc.Row([
+        dbc.Col([
+            dbc.Form([
+                dbc.Label('Selecionar Plataforma:', html_for='plataforma-checklist', style={'font-weight': '700', 'font-size': '20px'}),
                 dcc.Checklist(
                     id='plataforma-checklist',
                     options=[{'label': 'Facebook Ads', 'value': 'Facebook Ads'},
@@ -416,9 +471,11 @@ page_3_layout = html.Div([
                     inline=True,
                     labelStyle={'margin-right': '15px', 'font-size': '18px'}
                 )
-            ], width=6),
-            dbc.Col([
-                html.Label('Selecionar Mês:', style={'font-weight': '700', 'margin-right': '10px', 'font-size': '20px'}),
+            ])
+        ], md=6),
+        dbc.Col([
+            dbc.Form([
+                dbc.Label('Selecionar Mês:', html_for='mes-checklist', style={'font-weight': '700', 'font-size': '20px'}),
                 dcc.Checklist(
                     id='mes-checklist',
                     options=[{'label': mes, 'value': mes} for mes in ['Janeiro', 'Fevereiro', 'Março', 'Abril', 
@@ -428,236 +485,282 @@ page_3_layout = html.Div([
                     inline=True,
                     labelStyle={'margin-right': '15px', 'font-size': '18px'}
                 )
-            ], width=6)
-        ])
-    ], style={'text-align': 'center', 'margin-top': '20px', 'margin-bottom': '20px'}),
+            ])
+        ], md=6)
+    ], className="my-4"),
     
-    # Caixa de texto explicativo
-    html.Div([
-        html.P(
-            "Esta seção compara as métricas de desempenho de Facebook e Google Ads ao longo de todos os meses do ano. Complete os dados de setembro em diante quando disponíveis para uma análise completa.",
-            style={'font-size': '18px', 'text-align': 'center', 'font-style': 'italic'}
-        )
-    ], style={'margin-bottom': '20px'}),
+    dbc.Row([
+        dbc.Col([
+            html.P(
+                "Esta seção compara as métricas de desempenho de Facebook e Google Ads ao longo de todos os meses do ano. Complete os dados de setembro em diante quando disponíveis para uma análise completa.",
+                style={'font-size': '18px', 'text-align': 'center', 'font-style': 'italic'}
+            )
+        ], width=12)
+    ], className="my-4"),
     
-    # Gráficos
-    html.Div(id='graficos-metricas'),
+    dbc.Row([
+        dbc.Col([
+            html.Div(id='graficos-metricas')
+        ], width=12)
+    ], className="my-4"),
     
-    # Explicação das Métricas
-    html.Hr(),
-    html.H4("Explicação das Métricas", className="text-center", 
-            style={'font-size': '24px', 'color': primary_color}),
-    html.Ul([
-        html.Li([
-            html.B("Impressões: "),
-            "Quantidade de vezes que o anúncio foi exibido.",
-            html.Br(),
-            html.I("Fórmula: Impressões = Total de exibições do anúncio.")
-        ], style={'font-size': '18px'}),
-        html.Li([
-            html.B("Cliques no link: "),
-            "Quantidade de cliques no anúncio.",
-            html.Br(),
-            html.I("Fórmula: Cliques no link = Total de cliques no anúncio.")
-        ], style={'font-size': '18px'}),
-        html.Li([
-            html.B("Resultados: "),
-            "Total de ações realizadas pelos usuários (conversões).",
-            html.Br(),
-            html.I("Fórmula: Resultados = Total de conversões obtidas.")
-        ], style={'font-size': '18px'}),
-        html.Li([
-            html.B("CTR (%): "),
-            "Taxa de cliques.",
-            html.Br(),
-            html.I("Fórmula: CTR (%) = (Cliques / Impressões) × 100")
-        ], style={'font-size': '18px'}),
-        html.Li([
-            html.B("CPL (R$): "),
-            "Custo por Lead.",
-            html.Br(),
-            html.I("Fórmula: CPL (R$) = Valor gasto / Resultados")
-        ], style={'font-size': '18px'}),
-    ], className="list-group", style={'color': '#000000'}),
+    dbc.Row([
+        dbc.Col([
+            html.H4("Explicação das Métricas", className="text-center", 
+                    style={'font-size': '24px', 'color': primary_color}),
+            dbc.ListGroup([
+                dbc.ListGroupItem([
+                    html.B("Impressões: "),
+                    "Quantidade de vezes que o anúncio foi exibido.",
+                    html.Br(),
+                    html.I("Fórmula: Impressões = Total de exibições do anúncio.")
+                ], style={'font-size': '18px'}),
+                dbc.ListGroupItem([
+                    html.B("Cliques no link: "),
+                    "Quantidade de cliques no anúncio.",
+                    html.Br(),
+                    html.I("Fórmula: Cliques no link = Total de cliques no anúncio.")
+                ], style={'font-size': '18px'}),
+                dbc.ListGroupItem([
+                    html.B("Resultados: "),
+                    "Total de ações realizadas pelos usuários (conversões).",
+                    html.Br(),
+                    html.I("Fórmula: Resultados = Total de conversões obtidas.")
+                ], style={'font-size': '18px'}),
+                dbc.ListGroupItem([
+                    html.B("CTR (%): "),
+                    "Taxa de cliques.",
+                    html.Br(),
+                    html.I("Fórmula: CTR (%) = (Cliques / Impressões) × 100")
+                ], style={'font-size': '18px'}),
+                dbc.ListGroupItem([
+                    html.B("CPL (R$): "),
+                    "Custo por Lead.",
+                    html.Br(),
+                    html.I("Fórmula: CPL (R$) = Valor gasto / Resultados")
+                ], style={'font-size': '18px'}),
+            ], flush=True)
+        ], width=12)
+    ], className="my-4"),
     
     botoes_navegacao(prev_href='/page-2', next_href='/page-4')
-], style={'color': '#000000', 'font-family': 'Montserrat, sans-serif'})
+], fluid=True, style={'background-color': secondary_color})
+
 # Slide 4: Melhores Anúncios (CTR)
-page_4_layout = html.Div([
-    html.H1("Slide 4: Melhores Anúncios (CTR)", className="text-center", 
-            style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
+page_4_layout = dbc.Container([
+    dbc.Row([
+        dbc.Col([
+            html.H1("Melhores Anúncios (CTR)", className="text-center", 
+                    style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'})
+        ], width=12)
+    ], className="my-4"),
     
-    # Tabela de melhores anúncios atualizada
-    html.Div([
-        gerar_tabela(df_melhores_anuncios)
-    ], style={'margin-top': '30px'}),
+    dbc.Row([
+        dbc.Col([
+            gerar_tabela(df_melhores_anuncios)
+        ], width=12)
+    ], className="my-4"),
     
-    # Caixa de texto explicativo atualizado
-    html.Div([
-        html.P(
-            "Tivemos um aumento constante no CTR mês a mês, resultado de anúncios mais claros e objetivos. As copys foram ajustadas para comunicar soluções diretas aos problemas do público, como no caso do \"KIT PLANTIO TORNITEC\" e o foco em \"produtividade\", destacando os benefícios de forma rápida e eficiente. Essa clareza ajudou a captar a atenção dos usuários, aumentando o engajamento e a taxa de cliques.",
-            style={'font-size': '18px', 'text-align': 'center'}
-        )
-    ], style={'margin-top': '20px'}),
+    dbc.Row([
+        dbc.Col([
+            html.P(
+                "Tivemos um aumento constante no CTR mês a mês, resultado de anúncios mais claros e objetivos. As copys foram ajustadas para comunicar soluções diretas aos problemas do público, como no caso do \"KIT PLANTIO TORNITEC\" e o foco em \"produtividade\", destacando os benefícios de forma rápida e eficiente. Essa clareza ajudou a captar a atenção dos usuários, aumentando o engajamento e a taxa de cliques.",
+                style={'font-size': '18px', 'text-align': 'center'}
+            )
+        ], width=12)
+    ], className="my-4"),
     
-    # Exibir a imagem completa logo abaixo da tabela com o novo link
-    html.Div([
-        html.Img(
-            src="https://i.ibb.co/FByXKbq/anuncios.png",  # Link direto para a imagem
-            style={
-                'width': '100%',   # Ajuste para ocupar toda a largura disponível
-                'max-width': '800px',  # Define uma largura máxima de 800px para boa qualidade
-                'height': 'auto',  # Mantém a altura proporcional
-                'display': 'block',  # Centraliza a imagem
-                'margin-left': 'auto',
-                'margin-right': 'auto'
-            }
-        ),
-    ], className="d-flex justify-content-center mt-4"),
+    dbc.Row([
+        dbc.Col([
+            html.Img(
+                src="https://i.ibb.co/FByXKbq/anuncios.png",  # Link direto para a imagem
+                style={
+                    'width': '100%',   # Ajuste para ocupar toda a largura disponível
+                    'max-width': '800px',  # Define uma largura máxima de 800px para boa qualidade
+                    'height': 'auto',  # Mantém a altura proporcional
+                    'display': 'block',  # Centraliza a imagem
+                    'margin-left': 'auto',
+                    'margin-right': 'auto'
+                }
+            )
+        ], width=12, className="text-center my-4")
+    ]),
     
     botoes_navegacao(prev_href='/page-3', next_href='/page-5')
-], style={'color': '#000000', 'font-family': 'Montserrat, sans-serif'})
+], fluid=True, style={'background-color': secondary_color})
 
 # Slide 5: Cliques por Estado
-page_5_layout = html.Div([
-    html.H1("Slide 5: Cliques por Estado", className="text-center", 
-            style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
-    dcc.Graph(
-        id='grafico-pizza',
-        figure=px.pie(
-            df_estados,
-            names='Estado',
-            values='Cliques',
-            title='Distribuição de Cliques por Estado',
-            hole=0.3,
-            color_discrete_sequence=px.colors.qualitative.Pastel
-        ),
-        style={'height': '600px'}  # Aumenta o tamanho do gráfico
-    ),
-    # Caixa de texto explicativo atualizado
-    html.Div([
-        html.P(
-            "O Rio Grande do Sul e o Paraná lideram em número de cliques, resultado da nossa participação em feiras nesses estados. Essa presença aumentou significativamente a interação do público local com nossos anúncios, indicando mercados prioritários para futuras ações.",
-            style={'font-size': '18px', 'text-align': 'center'}
-        )
-    ], style={'margin-top': '20px'}),
+page_5_layout = dbc.Container([
+    dbc.Row([
+        dbc.Col([
+            html.H1("Cliques por Estado", className="text-center", 
+                    style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'})
+        ], width=12)
+    ], className="my-4"),
+    
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardBody([
+                    dcc.Graph(
+                        id='grafico-pizza',
+                        figure=px.pie(
+                            df_estados,
+                            names='Estado',
+                            values='Cliques',
+                            title='Distribuição de Cliques por Estado',
+                            hole=0.3,
+                            color_discrete_sequence=px.colors.qualitative.Pastel
+                        ),
+                        style={'height': '600px'}
+                    )
+                ])
+            ], className="mb-4")
+        ], width=12)
+    ], className="my-4"),
+    
+    dbc.Row([
+        dbc.Col([
+            html.P(
+                "O Rio Grande do Sul e o Paraná lideram em número de cliques, resultado da nossa participação em feiras nesses estados. Essa presença aumentou significativamente a interação do público local com nossos anúncios, indicando mercados prioritários para futuras ações.",
+                style={'font-size': '18px', 'text-align': 'center'}
+            )
+        ], width=12)
+    ], className="my-4"),
     
     botoes_navegacao(prev_href='/page-4', next_href='/page-6')
-], style={'color': '#000000', 'font-family': 'Montserrat, sans-serif'})
-# Criar uma cópia do DataFrame para a tabela formatada
-df_produtos_formatado = df_produtos.copy()
-# Aplicar a formatação para exibição na tabela
-df_produtos_formatado = formatar_valores(df_produtos_formatado)
+], fluid=True, style={'background-color': secondary_color})
 
 # Slide 6: Valores Individuais de Cada Produto (incluindo ROI e novos produtos)
-page_6_layout = html.Div([
-    html.H1("Slide 6: Valores Individuais de Cada Produto", className="text-center", 
-            style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'}),
-
-    # Tabela de Valores Investidos, Retornos e ROI
-    html.Div([
-        gerar_tabela(df_produtos_formatado)  # Usando o DataFrame formatado na tabela
-    ], style={'margin-top': '30px', 'margin-bottom': '30px'}),
-
-    # Gráfico de Investimento vs Retorno por Produto
-    html.Div([   
-        dcc.Graph(
-            id='grafico-produtos',
-            figure=criar_grafico_produtos(df_produtos)  # Usando o DataFrame não formatado para o gráfico
-        )
-    ]),
-
-    # Caixa de texto explicativo
-    html.Div([
-        html.P(
-            "Esta tabela e gráfico mostram os investimentos realizados em cada produto e os respectivos retornos obtidos. Analisar esses dados permite avaliar a eficácia dos investimentos e tomar decisões estratégicas para futuros lançamentos e campanhas.",
-            style={'font-size': '18px', 'text-align': 'center'}
-        )
-    ], style={'margin-top': '20px'}),
-
-    # Botões de navegação
-    botoes_navegacao(prev_href='/page-5', next_href='/page-7')  # Função de navegação
-], style={'color': '#000000', 'font-family': 'Montserrat, sans-serif'})
-
-
-# Slide 7: Funil de Vendas com as Etapas
-page_7_layout = html.Div([
-    html.H1("Slide 7: Funil de Vendas", className="text-center", 
-            style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'}),
+page_6_layout = dbc.Container([
+    dbc.Row([
+        dbc.Col([
+            html.H1("Valores Individuais de Cada Produto", className="text-center", 
+                    style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'})
+        ], width=12)
+    ], className="my-4"),
     
-    # Tabela do Funil de Vendas
-    html.Div([
-        gerar_tabela(pd.DataFrame({
-            'Etapa': ['Leads Frios', 'Atendidos', 'Oportunidades', 'Conversões'],
-            'Quantidade': [1371, 635, 100, 61]
-        }))
-    ], style={'margin-top': '30px', 'margin-bottom': '30px'}),
+    dbc.Row([
+        dbc.Col([
+            gerar_tabela(df_produtos)
+        ], width=12)
+    ], className="my-4"),
     
-    # Gráfico do Funil de Vendas Horizontal
-    html.Div([
-        dcc.Graph(
-            id='grafico-funil',
-            figure=criar_funil_horizontal(pd.DataFrame({
-                'Etapa': ['Leads Frios', 'Atendidos', 'Oportunidades', 'Conversões'],
-                'Quantidade': [1371, 635, 100, 61]
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardBody([
+                    dcc.Graph(
+                        id='grafico-produtos',
+                        figure=criar_grafico_produtos(df_produtos_original)
+                    )
+                ])
+            ], className="mb-4")
+        ], width=12)
+    ], className="my-4"),
+    
+    dbc.Row([
+        dbc.Col([
+            html.P(
+                "Esta tabela e gráfico mostram os investimentos realizados em cada produto e os respectivos retornos obtidos. Analisar esses dados permite avaliar a eficácia dos investimentos e tomar decisões estratégicas para futuros lançamentos e campanhas.",
+                style={'font-size': '18px', 'text-align': 'center'}
+            )
+        ], width=12)
+    ], className="my-4"),
+    
+    botoes_navegacao(prev_href='/page-5', next_href='/page-7')
+], fluid=True, style={'background-color': secondary_color})
+
+# Slide 7: Funil de Vendas com as Etapas (Removendo "Oportunidades")
+page_7_layout = dbc.Container([
+    dbc.Row([
+        dbc.Col([
+            html.H1("Funil de Vendas", className="text-center", 
+                    style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'})
+        ], width=12)
+    ], className="my-4"),
+    
+    dbc.Row([
+        dbc.Col([
+            gerar_tabela(pd.DataFrame({
+                'Etapa': ['Leads Frios', 'Atendidos', 'Conversões'],  # Removido "Oportunidades"
+                'Quantidade': [1371, 635, 61]  # Ajustado as quantidades
             }))
-        )
-    ], style={'height': '400px'}),
+        ], width=12)
+    ], className="my-4"),
     
-    # Caixa de texto explicativo
-    html.Div([
-        html.P(
-            "Este funil de vendas ilustra a jornada dos leads desde o estágio inicial até a conversão final. É uma ferramenta essencial para identificar gargalos e otimizar nosso processo de vendas.",
-            style={'font-size': '18px', 'text-align': 'center'}
-        )
-    ], style={'margin-top': '20px'}),
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardBody([
+                    dcc.Graph(
+                        id='grafico-funil',
+                        figure=criar_funil_horizontal(pd.DataFrame({
+                            'Etapa': ['Leads Frios', 'Atendidos', 'Conversões'],  # Removido "Oportunidades"
+                            'Quantidade': [1371, 635, 61]  # Ajustado as quantidades
+                        }))
+                    )
+                ])
+            ], className="mb-4")
+        ], width=12)
+    ], className="my-4"),
+    
+    dbc.Row([
+        dbc.Col([
+            html.P(
+                "Este funil de vendas ilustra a jornada dos leads desde o estágio inicial até a conversão final. É uma ferramenta essencial para identificar gargalos e otimizar nosso processo de vendas.",
+                style={'font-size': '18px', 'text-align': 'center'}
+            )
+        ], width=12)
+    ], className="my-4"),
     
     botoes_navegacao(prev_href='/page-6', next_href='/page-8')
-], style={'color': '#000000', 'font-family': 'Montserrat, sans-serif'})
+], fluid=True, style={'background-color': secondary_color})
 
 # Slide 8: Explicação de ROI e ROAS (último slide)
-page_8_layout = html.Div([
-    html.H1("Slide 8: Explicação do ROI e ROAS", className="text-center", 
-            style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'}),
+page_8_layout = dbc.Container([
+    dbc.Row([
+        dbc.Col([
+            html.H1("Explicação do ROI e ROAS", className="text-center", 
+                    style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'})
+        ], width=12)
+    ], className="my-4"),
     
-    # Explicação do ROI Externo
-    html.Div([
-        html.H3("ROI Externo", className="text-center", 
-                style={'font-size': '28px', 'color': primary_color}),
-        html.P("Investimento: R$ 54.170,23", className="text-center", 
-               style={'font-size': '24px'}),
-        html.P("Retorno gerado: R$ 7.515.208,52", className="text-center", 
-               style={'font-size': '24px'}),
-        html.P("ROI = 13.771,37%", className="text-center", 
-               style={'font-size': '24px'}),
-        html.P("ROAS: R$ 138,74", className="text-center", 
-               style={'font-size': '24px'}),
-        html.P(
-            "Isso significa que para cada R$ 1 investido, gerou R$ 138,74 em receita, e o retorno sobre o investimento total foi de 13.771,37%.",
-            style={'font-size': '20px', 'text-align': 'center'}
-        )
-    ], className="mb-4"),
-    
-        # Explicação do ROI Interno
-    html.Div([
-        html.H3("ROI Interno", className="text-center", 
-                style={'font-size': '28px', 'color': primary_color}),
-        html.P("Faturamento interno (receita): R$ 2.497.224,63 (Kit e Máquinas)", className="text-center", 
-               style={'font-size': '24px'}),
-        html.P("Investimento total (custo): R$ 54.170,23", className="text-center", 
-               style={'font-size': '24px'}),
-        html.P("ROI: 4.508,98%", className="text-center", 
-               style={'font-size': '24px'}),
-        html.P("ROAS: R$ 46,09", className="text-center", 
-               style={'font-size': '24px'}),
-        html.P(
-            "Isso significa que para cada R$ 1 investido, você gerou R$ 46,09 em receita internamente, com um retorno sobre o investimento de 4.508,98%.",
-            style={'font-size': '20px', 'text-align': 'center'}
-        )
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader(html.H3("ROI Externo", className="text-center", style={'color': primary_color})),
+                dbc.CardBody([
+                    html.P("Investimento: R$ 54.170,23", className="card-text"),
+                    html.P("Retorno gerado: R$ 7.515.208,52", className="card-text"),
+                    html.P("ROI = 13.771,37%", className="card-text"),
+                    html.P("ROAS: R$ 138,74", className="card-text"),
+                    html.P(
+                        "Isso significa que para cada R$ 1 investido, gerou R$ 138,74 em receita, e o retorno sobre o investimento total foi de 13.771,37%.",
+                        style={'font-size': '20px'}
+                    )
+                ])
+            ], color="dark", inverse=True, className="mb-4")
+        ], md=6),
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader(html.H3("ROI Interno", className="text-center", style={'color': primary_color})),
+                dbc.CardBody([
+                    html.P("Faturamento interno (receita): R$ 2.497.224,63 (Kit e Máquinas)", className="card-text"),
+                    html.P("Investimento total (custo): R$ 54.170,23", className="card-text"),
+                    html.P("ROI: 4.508,98%", className="card-text"),
+                    html.P("ROAS: R$ 46,09", className="card-text"),
+                    html.P(
+                        "Isso significa que para cada R$ 1 investido, você gerou R$ 46,09 em receita internamente, com um retorno sobre o investimento de 4.508,98%.",
+                        style={'font-size': '20px'}
+                    )
+                ])
+            ], color="dark", inverse=True, className="mb-4")
+        ], md=6)
     ]),
     
     botoes_navegacao(prev_href='/page-7', next_href='/page-1')  # Volta para o Slide 1
-], style={'color': '#000000', 'font-family': 'Montserrat, sans-serif'})
+], fluid=True, style={'background-color': secondary_color})
 
 # Callback para alterar a página de acordo com a URL
 @app.callback(Output('page-content', 'children'),
@@ -691,11 +794,13 @@ def update_graphs(plataformas, meses):
     graficos = []
     for metrica in metricas:
         fig = criar_grafico(metrica, metrica, plataformas, meses)
-        graficos.append(html.Div([
-            html.H4(metrica, className="text-center", 
-                    style={'color': primary_color, 'font-size': '24px'}),
-            dcc.Graph(figure=fig)
-        ]))
+        graficos.append(dbc.Card([
+            dbc.CardHeader(html.H4(metrica, className="text-center", 
+                                   style={'color': primary_color, 'font-size': '24px'})),
+            dbc.CardBody([
+                dcc.Graph(figure=fig)
+            ])
+        ], className="mb-4"))
     return graficos
 
 # Callback para atualizar o Funil de Vendas Horizontal
@@ -707,8 +812,8 @@ def atualizar_funil(pathname):
     if pathname == '/page-7':
         # Substitua os dados abaixo com dados dinâmicos conforme necessário
         dados_funil = pd.DataFrame({
-            'Etapa': ['Leads Frios', 'Atendidos', 'Oportunidades', 'Conversões'],
-            'Quantidade': [1371, 635, 100, 61]
+            'Etapa': ['Leads Frios', 'Atendidos', 'Conversões'],  # Removido "Oportunidades"
+            'Quantidade': [1371, 635, 61]  # Ajustado as quantidades
         })
         return criar_funil_horizontal(dados_funil)
     else:
@@ -718,4 +823,3 @@ def atualizar_funil(pathname):
 # Rodar o servidor com host='0.0.0.0' para permitir conexões externas
 if __name__ == '__main__':
     app.run_server(debug=False, host='0.0.0.0', port=8050)
-
