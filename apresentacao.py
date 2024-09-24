@@ -385,7 +385,7 @@ page_1_layout = dbc.Container([
             html.Img(
                 src="https://i.ibb.co/jf2b0g7/AGROSS-texto-versaofinal.png",  # Substitua pelo link direto da imagem do logo
                 style={
-                    'width': '600px',  # Ajuste o tamanho conforme necessário
+                    'width': '500px',  # Ajuste o tamanho conforme necessário
                     'height': 'auto',
                     'display': 'block',
                     'margin-left': 'auto',
