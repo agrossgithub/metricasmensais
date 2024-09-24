@@ -123,11 +123,10 @@ dados_estados['Cliques'][-1] = cliques_outros
 df_estados = pd.DataFrame(dados_estados)
 
 
-# Dados para Slide 6: Valores Individuais de Cada Produto (incluindo novos produtos)
 dados_produtos = {
     'Produto': ['Kit Plantio', 'Turbo Mix', 'Vollverini', 'Best Mix', 'Nitro Mix'],
-    'Valor Investido (R$)': [20000.00, 15000.00, 18000.00, 22000.00, 25000.00],
-    'Retorno (R$)': [50000.00, 45000.00, 47000.00, 55000.00, 60000.00]
+    'Valor Investido (R$)': [10845.15, 5842.36, 4621.99, 1260.09, 0],
+    'Retorno (R$)': [1655659.44, 0, 816725.00, 0, 0]
 }
 
 # Criando o DataFrame a partir do dicionário
@@ -583,7 +582,7 @@ page_7_layout = html.Div([
     html.Div([
         gerar_tabela(pd.DataFrame({
             'Etapa': ['Leads Frios', 'Atendidos', 'Oportunidades', 'Conversões'],
-            'Quantidade': [1000, 600, 300, 150]
+            'Quantidade': [1371, 635, 100, 61]
         }))
     ], style={'margin-top': '30px', 'margin-bottom': '30px'}),
     
@@ -702,7 +701,7 @@ def atualizar_funil(pathname):
         # Substitua os dados abaixo com dados dinâmicos conforme necessário
         dados_funil = pd.DataFrame({
             'Etapa': ['Leads Frios', 'Atendidos', 'Oportunidades', 'Conversões'],
-            'Quantidade': [1000, 600, 300, 150]
+            'Quantidade': [1371, 635, 100, 61]
         })
         return criar_funil_horizontal(dados_funil)
     else:
@@ -712,4 +711,3 @@ def atualizar_funil(pathname):
 # Rodar o servidor com host='0.0.0.0' para permitir conexões externas
 if __name__ == '__main__':
     app.run_server(debug=False, host='0.0.0.0', port=8050)
-
