@@ -520,24 +520,28 @@ page_5_layout = html.Div([
 ], style={'color': '#000000', 'font-family': 'Montserrat, sans-serif'})
 
 # Slide 6: Valores Individuais de Cada Produto (incluindo ROI e novos produtos)
+df_produtos_formatado = df_produtos.copy()
+# Aplicar a formatação para exibição na tabela
+df_produtos_formatado = formatar_valores(df_produtos_formatado)
+
+# Slide 6: Valores Individuais de Cada Produto (incluindo ROI e novos produtos)
 page_6_layout = html.Div([
     html.H1("Slide 6: Valores Individuais de Cada Produto", className="text-center", 
             style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'}),
-    
+
     # Tabela de Valores Investidos, Retornos e ROI
     html.Div([
-        gerar_tabela(df_produtos)
+        gerar_tabela(df_produtos_formatado)  # Usando o DataFrame formatado na tabela
     ], style={'margin-top': '30px', 'margin-bottom': '30px'}),
-    
+
     # Gráfico de Investimento vs Retorno por Produto
-    html.Div([
+    html.Div([   
         dcc.Graph(
             id='grafico-produtos',
-            figure=criar_grafico_produtos(df_produtos)
+            figure=criar_grafico_produtos(df_produtos)  # Usando o DataFrame não formatado para o gráfico
         )
-    ], style={'height': '500px'}),
-    
-    # Caixa de texto explicativo
+    ]),
+
     html.Div([
         html.P(
             "Esta tabela e gráfico mostram os investimentos realizados em cada produto e os respectivos retornos obtidos. Analisar esses dados permite avaliar a eficácia dos investimentos e tomar decisões estratégicas para futuros lançamentos e campanhas.",
