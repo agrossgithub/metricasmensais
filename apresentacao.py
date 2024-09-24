@@ -57,6 +57,7 @@ def formatar_linha(row):
 
 df_desempenho = df_desempenho.apply(formatar_linha, axis=1)
 
+# Dados de comparação entre todos os meses do ano (Janeiro a Dezembro)
 dados_comparacao = {
     'Métrica': ['Impressões', 'Cliques no link', 'Resultados', 'CTR (%)', 'CPL (R$)'],
     'Facebook Ads - Janeiro': [1500000, 20000, 500, 1.33, 40.00],
@@ -121,6 +122,7 @@ dados_estados['Cliques'][-1] = cliques_outros
 
 df_estados = pd.DataFrame(dados_estados)
 
+
 # Dados para Slide 6: Valores Individuais de Cada Produto (incluindo novos produtos)
 dados_produtos = {
     'Produto': ['Kit Plantio', 'Turbo Mix', 'Vollverini', 'Best Mix', 'Nitro Mix'],
@@ -128,10 +130,28 @@ dados_produtos = {
     'Retorno (R$)': [50000.00, 45000.00, 47000.00, 55000.00, 60000.00]
 }
 
+# Criando o DataFrame a partir do dicionário
 df_produtos = pd.DataFrame(dados_produtos)
 
 # Calcular ROI por produto
 df_produtos['ROI (%)'] = ((df_produtos['Retorno (R$)'] - df_produtos['Valor Investido (R$)']) / df_produtos['Valor Investido (R$)']) * 100
+
+# Função para formatar valores monetários
+def formatar_valores(df):
+    df['Valor Investido (R$)'] = df['Valor Investido (R$)'].apply(lambda x: f'R$ {x:,.2f}')
+    df['Retorno (R$)'] = df['Retorno (R$)'].apply(lambda x: f'R$ {x:,.2f}')
+    df['ROI (%)'] = df['ROI (%)'].apply(lambda x: f'{x:.2f}%')
+    return df
+
+# Aplicando a formatação de valores monetários
+df_produtos = formatar_valores(df_produtos)
+
+
+df_produtos = pd.DataFrame(dados_produtos)
+
+# Calcular ROI por produto
+df_produtos['ROI (%)'] = ((df_produtos['Retorno (R$)'] - df_produtos['Valor Investido (R$)']) / df_produtos['Valor Investido (R$)']) * 100
+
 
 # Função para gerar a tabela de desempenho com estilos aprimorados
 def gerar_tabela(df):
@@ -518,8 +538,7 @@ page_5_layout = html.Div([
     
     botoes_navegacao(prev_href='/page-4', next_href='/page-6')
 ], style={'color': '#000000', 'font-family': 'Montserrat, sans-serif'})
-
-# Slide 6: Valores Individuais de Cada Produto (incluindo ROI e novos produtos)
+# Criar uma cópia do DataFrame para a tabela formatada
 df_produtos_formatado = df_produtos.copy()
 # Aplicar a formatação para exibição na tabela
 df_produtos_formatado = formatar_valores(df_produtos_formatado)
@@ -542,15 +561,18 @@ page_6_layout = html.Div([
         )
     ]),
 
+    # Caixa de texto explicativo
     html.Div([
         html.P(
             "Esta tabela e gráfico mostram os investimentos realizados em cada produto e os respectivos retornos obtidos. Analisar esses dados permite avaliar a eficácia dos investimentos e tomar decisões estratégicas para futuros lançamentos e campanhas.",
             style={'font-size': '18px', 'text-align': 'center'}
         )
     ], style={'margin-top': '20px'}),
-    
-    botoes_navegacao(prev_href='/page-5', next_href='/page-7')
+
+    # Botões de navegação
+    botoes_navegacao(prev_href='/page-5', next_href='/page-7')  # Função de navegação
 ], style={'color': '#000000', 'font-family': 'Montserrat, sans-serif'})
+
 
 # Slide 7: Funil de Vendas com as Etapas
 page_7_layout = html.Div([
