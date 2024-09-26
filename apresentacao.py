@@ -3,6 +3,7 @@ from dash import dcc, html, Input, Output
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
+from datetime import datetime
 
 # Lista de estilos externos incluindo Montserrat via Google Fonts e Font Awesome para ícones
 external_stylesheets = [
@@ -20,70 +21,150 @@ primary_color = '#00FF7F'  # Verde fluorescente para títulos
 secondary_color = '#f0f2f5'  # Fundo mais agradável
 accent_color = '#343a40'  # Cor de texto escuro para contraste
 
-# Dados de desempenho de Facebook Ads e Google Ads (Janeiro a Dezembro)
+# Lista completa de meses
+meses_completos = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+]
+
+# Dados de desempenho de Facebook Ads e Google Ads (Junho a Setembro)
 dados_desempenho = {
-    'Plataforma': [
-        'Facebook Ads', 'Facebook Ads', 'Facebook Ads', 'Facebook Ads', 'Facebook Ads', 'Facebook Ads',
-        'Facebook Ads', 'Facebook Ads', 'Facebook Ads', 'Facebook Ads', 'Facebook Ads', 'Facebook Ads',
-        'Google Ads', 'Google Ads', 'Google Ads', 'Google Ads', 'Google Ads', 'Google Ads',
-        'Google Ads', 'Google Ads', 'Google Ads', 'Google Ads', 'Google Ads', 'Google Ads'
-    ],
-    'Mês': [
-        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-    ],
-    'Impressões': [
-        None, None, None, None, None, 1703129, 2676920, 3551018, None, None, None, None,
-        None, None, None, None, None, 273086, 191434, 274854, None, None, None, None
-    ],
-    'Cliques no link': [
-        None, None, None, None, None, 16241, 23930, 49775, None, None, None, None,
-        None, None, None, None, None, 10151, 7170, 21898, None, None, None, None
-    ],
-    'Resultados': [
-        None, None, None, None, None, 516, 1140, 1371, None, None, None, None,
-        None, None, None, None, None, 240, 221, 300, None, None, None, None
-    ],
-    'Orçamento (R$)': [
-        None, None, None, None, None, 21361.39, 28062.78, 44717.89, None, None, None, None,
-        None, None, None, None, None, 8595.68, 7952.17, 9452.34, None, None, None, None
-    ],
-    'CTR (%)': [
-        None, None, None, None, None, 0.93, 1.36, 2.88, None, None, None, None,
-        None, None, None, None, None, 5.51, 5.48, 1.78, None, None, None, None
-    ],
-    'CPL (R$)': [
-        None, None, None, None, None, 43.54, 42.28, 32.50, None, None, None, None,
-        None, None, None, None, None, 30.58, 63.13, 40.00, None, None, None, None
-    ]
+    'Plataforma': [],
+    'Mês': [],
+    'Impressões': [],
+    'Cliques no link': [],
+    'Resultados': [],
+    'Orçamento (R$)': [],
+    'CTR (%)': [],
+    'CPL (R$)': []
 }
+
+# Dados existentes para Facebook Ads
+facebook_ads_data = {
+    'Junho': {'Impressões': 1703129, 'Cliques no link': 16241, 'Resultados': 516, 'Orçamento (R$)': 21361.39, 'CTR (%)': 0.93, 'CPL (R$)': 43.54},
+    'Julho': {'Impressões': 2676920, 'Cliques no link': 23930, 'Resultados': 1140, 'Orçamento (R$)': 28062.78, 'CTR (%)': 1.36, 'CPL (R$)': 42.28},
+    'Agosto': {'Impressões': 3551018, 'Cliques no link': 49775, 'Resultados': 1371, 'Orçamento (R$)': 44717.89, 'CTR (%)': 2.88, 'CPL (R$)': 32.50},
+    'Setembro': {'Impressões': 1453771, 'Cliques no link': 18896, 'Resultados': 719, 'Orçamento (R$)': 17278.33, 'CTR (%)': 1.74, 'CPL (R$)': 33.06}
+}
+
+# Dados existentes para Google Ads
+google_ads_data = {
+    'Junho': {'Impressões': 273086, 'Cliques no link': 10151, 'Resultados': 240, 'Orçamento (R$)': 8595.68, 'CTR (%)': 5.51, 'CPL (R$)': 30.58},
+    'Julho': {'Impressões': 191434, 'Cliques no link': 7170, 'Resultados': 221, 'Orçamento (R$)': 7952.17, 'CTR (%)': 5.48, 'CPL (R$)': 63.13},
+    'Agosto': {'Impressões': 274854, 'Cliques no link': 21898, 'Resultados': 300, 'Orçamento (R$)': 9452.34, 'CTR (%)': 1.78, 'CPL (R$)': 40.00},
+    'Setembro': {'Impressões': 108475, 'Cliques no link': 9447, 'Resultados': 224, 'Orçamento (R$)': 7485.53, 'CTR (%)': 7.49, 'CPL (R$)': 30.70}
+}
+
+# Preencher dados_desempenho com todos os meses
+for plataforma in ['Facebook Ads', 'Google Ads']:
+    for mes in meses_completos:
+        dados_desempenho['Plataforma'].append(plataforma)
+        dados_desempenho['Mês'].append(mes)
+        if plataforma == 'Facebook Ads':
+            if mes in facebook_ads_data:
+                dados_desempenho['Impressões'].append(facebook_ads_data[mes]['Impressões'])
+                dados_desempenho['Cliques no link'].append(facebook_ads_data[mes]['Cliques no link'])
+                dados_desempenho['Resultados'].append(facebook_ads_data[mes]['Resultados'])
+                dados_desempenho['Orçamento (R$)'].append(facebook_ads_data[mes]['Orçamento (R$)'])
+                dados_desempenho['CTR (%)'].append(facebook_ads_data[mes]['CTR (%)'])
+                dados_desempenho['CPL (R$)'].append(facebook_ads_data[mes]['CPL (R$)'])
+            else:
+                # Placeholder para meses sem dados
+                dados_desempenho['Impressões'].append(0)
+                dados_desempenho['Cliques no link'].append(0)
+                dados_desempenho['Resultados'].append(0)
+                dados_desempenho['Orçamento (R$)'].append(0.0)
+                dados_desempenho['CTR (%)'].append(0.0)
+                dados_desempenho['CPL (R$)'].append(0.0)
+        elif plataforma == 'Google Ads':
+            if mes in google_ads_data:
+                dados_desempenho['Impressões'].append(google_ads_data[mes]['Impressões'])
+                dados_desempenho['Cliques no link'].append(google_ads_data[mes]['Cliques no link'])
+                dados_desempenho['Resultados'].append(google_ads_data[mes]['Resultados'])
+                dados_desempenho['Orçamento (R$)'].append(google_ads_data[mes]['Orçamento (R$)'])
+                dados_desempenho['CTR (%)'].append(google_ads_data[mes]['CTR (%)'])
+                dados_desempenho['CPL (R$)'].append(google_ads_data[mes]['CPL (R$)'])
+            else:
+                # Placeholder para meses sem dados
+                dados_desempenho['Impressões'].append(0)
+                dados_desempenho['Cliques no link'].append(0)
+                dados_desempenho['Resultados'].append(0)
+                dados_desempenho['Orçamento (R$)'].append(0.0)
+                dados_desempenho['CTR (%)'].append(0.0)
+                dados_desempenho['CPL (R$)'].append(0.0)
 
 df_desempenho = pd.DataFrame(dados_desempenho)
 
-# Dados dos melhores anúncios (por mês)
+# Dados de melhores anúncios (CTR) para todos os meses (Agosto e Setembro têm dados)
 dados_melhores_anuncios = {
-    'Mês': ['Agosto'] * 6,
-    'Anúncio': [
-        'Aumente sua PRODUTIVIDADE!', 
-        'Cadastre-se e fale conosco', 
-        'Com o KIT PLANTIO TORNITEC', 
-        'Para o grande e pequeno produtor!', 
-        'Cadastre-se e fale conosco (Turbomix)', 
-        'KIT PLANTIO NA AGROLEITE!'
-    ],
-    'CTR (%)': [2.88, 2.73, 2.57, 1.94, 1.84, 1.78],
-    'Imagem': ["https://i.ibb.co/FByXKbq/anuncios.png"] * 6  # Placeholder para as imagens dos anúncios
+    'Mês': [],
+    'Anúncio': [],
+    'CTR (%)': [],
+    'Imagem': []
 }
+
+# Lista de anúncios fixos
+lista_anuncios = [
+    'Aumente sua PRODUTIVIDADE!', 
+    'Cadastre-se e fale conosco', 
+    'Com o KIT PLANTIO TORNITEC', 
+    'Para o grande e pequeno produtor!', 
+    'Cadastre-se e fale conosco (Turbomix)', 
+    'KIT PLANTIO NA AGROLEITE!'
+]
+
+# URLs das imagens para anúncios (placeholder para meses sem dados)
+imagem_placeholder = "https://i.ibb.co/FByXKbq/anuncios.png"
+imagem_setembro = "https://i.ibb.co/8rWv8vG/Captura-de-tela-2024-09-26-102148.png"
+
+for mes in meses_completos:
+    for anuncio in lista_anuncios:
+        dados_melhores_anuncios['Mês'].append(mes)
+        dados_melhores_anuncios['Anúncio'].append(anuncio)
+        if mes == 'Agosto':
+            # Dados reais para Agosto
+            index = lista_anuncios.index(anuncio)
+            dados_melhores_anuncios['CTR (%)'].append([2.88, 2.73, 2.57, 1.94, 1.84, 1.78][index])
+            dados_melhores_anuncios['Imagem'].append(imagem_placeholder)
+        elif mes == 'Setembro':
+            # Dados reais para Setembro com 5 diferentes CTRs
+            ctrs_setembro = {
+                'Aumente sua PRODUTIVIDADE!': 0.0,  # Placeholder, ajuste conforme necessário
+                'Cadastre-se e fale conosco': 3.86,
+                'Com o KIT PLANTIO TORNITEC': 5.08,
+                'Para o grande e pequeno produtor!': 2.71,
+                'Cadastre-se e fale conosco (Turbomix)': 2.27,
+                'KIT PLANTIO NA AGROLEITE!': 1.52
+            }
+            # Verificar se o anúncio tem um CTR específico
+            ctr = ctrs_setembro.get(anuncio, 0.0)
+            dados_melhores_anuncios['CTR (%)'].append(ctr)
+            dados_melhores_anuncios['Imagem'].append(imagem_setembro)
+        else:
+            # Placeholder para meses sem dados
+            dados_melhores_anuncios['CTR (%)'].append(0.0)
+            dados_melhores_anuncios['Imagem'].append(imagem_placeholder)
 
 df_melhores_anuncios = pd.DataFrame(dados_melhores_anuncios)
 
 # Dados de valores individuais de cada produto
 dados_produtos = {
-    'Produto': ['Kit Plantio', 'Turbo Mix', 'Vollverini', 'Best Mix', 'Nitro Mix'],
-    'Valor Investido (R$)': [10845.15, 5842.36, 4621.99, 1260.09, 1.00],
-    'Retorno (R$)': [1655659.44, 0.00, 816725.00, 0.00, 0.00]
+    'Mês': meses_completos * 5,  # 5 produtos
+    'Produto': ['Kit Plantio'] * 12 + ['Turbo Mix'] * 12 + ['Vollverini'] * 12 + ['Best Mix'] * 12 + ['Nitro Mix'] * 12,
+    'Valor Investido (R$)': [
+        0, 0, 0, 0, 0, 0, 0, 10845.15, 0, 0, 0, 0,  # Kit Plantio
+        0, 0, 0, 0, 0, 0, 0, 5842.36, 0, 0, 0, 0,   # Turbo Mix
+        0, 0, 0, 0, 0, 0, 0, 4621.99, 0, 0, 0, 0,   # Vollverini
+        0, 0, 0, 0, 0, 0, 0, 1260.09, 0, 0, 0, 0,   # Best Mix
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0        # Nitro Mix
+    ],
+    'Retorno (R$)': [
+        0, 0, 0, 0, 0, 0, 0, 1655659.44, 0, 0, 0, 0,  # Kit Plantio
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,           # Turbo Mix
+        0, 0, 0, 0, 0, 0, 0, 816725.00, 0, 0, 0, 0,   # Vollverini
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,           # Best Mix
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0            # Nitro Mix
+    ]
 }
 
 df_produtos = pd.DataFrame(dados_produtos)
@@ -121,19 +202,38 @@ def formatar_valores(df):
 # Aplicando a formatação de valores monetários
 df_produtos_formatado = formatar_valores(df_produtos)
 
-# Dados de cliques por estado (apenas agosto possui dados atualmente)
+# Dados de cliques por estado (Agosto e Setembro)
 dados_estados = {
-    'Estado': [
-        'Rio Grande do Sul', 'Paraná', 'Santa Catarina', 'Minas Gerais', 'Goiás', 'São Paulo', 
-        'Mato Grosso', 'Tocantins', 'Atlântico', 'Maranhão', 'Distrito Federal', 
-        'Mato Grosso do Sul', 'Pará', 'Alto Paraná Department', 'Piauí',
-        'Itapúa Department', 'Central Department'
-    ],
-    'Cliques': [28788, 21854, 7365, 3749, 3319, 2985, 2672, 2420,
-                1796, 1775, 1192, 1104, 647, 584, 520, 485, 398]
+    'Agosto': {
+        'Estado': [
+            'Rio Grande do Sul', 'Paraná', 'Santa Catarina', 'Minas Gerais', 'Goiás', 'São Paulo', 
+            'Mato Grosso', 'Tocantins', 'Atlântico', 'Maranhão', 'Distrito Federal', 
+            'Mato Grosso do Sul', 'Pará', 'Alto Paraná Department', 'Piauí',
+            'Itapúa Department', 'Central Department'
+        ],
+        'Cliques': [28788, 21854, 7365, 3749, 3319, 2985, 2672, 2420, 
+                    1796, 1775, 1192, 1104, 647, 584, 520, 485, 398]
+    },
+    'Setembro': {
+        'Estado': [
+            'Rio Grande do Sul', 'Minas Gerais', 'Paraná', 'São Paulo (state)', 'Santa Catarina', 
+            'Goiás', 'Mato Grosso', 'Tocantins', 'Federal District', 'Mato Grosso do Sul', 'Bahia', 
+            'Maranhão', 'Alto Paraná Department', 'Itapúa Department', 'Atlantico', 'Pará', 
+            'Caaguazú Department', 'Nuevo León', 'Canindeyú Department'
+        ],
+        'Cliques': [
+            8408, 2812, 2399, 2220, 2081, 1990, 1960, 1166, 1114, 1064, 824, 722, 
+            422, 294, 288, 264, 190, 115, 112
+        ]
+    }
 }
 
-df_estados = pd.DataFrame(dados_estados)
+df_estados = pd.DataFrame()
+
+for mes, dados in dados_estados.items():
+    df_mes_estados = pd.DataFrame(dados)
+    df_mes_estados['Mês'] = mes
+    df_estados = pd.concat([df_estados, df_mes_estados], ignore_index=True)
 
 # Função para formatar valores monetários conforme a métrica
 def formatar_valor(metrica, valor):
@@ -219,9 +319,8 @@ def gerar_tabela_desempenho(df, total_facebook, total_google, total_spend):
 
 # Função para criar o gráfico de média dos totais (incluindo Google Ads e Facebook Ads)
 def criar_grafico_media_totais(metrica_selecionada):
-    meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
-             'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
-    
+    meses = meses_completos
+
     # Agregar os valores por mês e plataforma
     df_plot = df_desempenho.groupby(['Mês', 'Plataforma'], as_index=False)[metrica_selecionada].sum()
 
@@ -230,9 +329,6 @@ def criar_grafico_media_totais(metrica_selecionada):
     complete_data = pd.DataFrame([(mes, plataforma) for mes in meses for plataforma in plataformas], columns=['Mês', 'Plataforma'])
     df_plot = complete_data.merge(df_plot, on=['Mês', 'Plataforma'], how='left').fillna(0)
     
-    # Filtrar apenas os meses selecionados (se necessário)
-    # Aqui assumimos que todos os meses estão sendo considerados
-
     fig = px.bar(
         df_plot,
         x='Mês',
@@ -255,10 +351,13 @@ def criar_grafico_media_totais(metrica_selecionada):
     
     return fig
 
-# Função para criar o gráfico de cliques por estado
+# Função para criar o gráfico de cliques por estado para vários meses
 def criar_grafico_cliques_estado(mes_selecionado):
-    if mes_selecionado != 'Agosto':
-        # Sem dados para outros meses
+    # Filtrar os dados para o mês selecionado
+    df_mes = df_estados[df_estados['Mês'] == mes_selecionado]
+    
+    if df_mes.empty:
+        # Sem dados para o mês selecionado
         fig = px.bar(title=f"Cliques por Estado - {mes_selecionado} (Sem dados)")
         fig.update_layout(
             plot_bgcolor=secondary_color,
@@ -268,9 +367,9 @@ def criar_grafico_cliques_estado(mes_selecionado):
         )
         return fig
     else:
-        # Criar o gráfico de pizza para agosto
+        # Criar o gráfico de pizza
         fig = px.pie(
-            df_estados,
+            df_mes,
             names='Estado',
             values='Cliques',
             title=f'Distribuição de Cliques por Estado - {mes_selecionado}',
@@ -371,10 +470,7 @@ page_2_layout = html.Div([
         html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
         dcc.Dropdown(
             id='mes-desempenho-dropdown',
-            options=[{'label': mes, 'value': mes} for mes in [
-                'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-                'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-            ]],
+            options=[{'label': mes, 'value': mes} for mes in meses_completos],
             value='Agosto',
             clearable=False,
             style={'width': '50%', 'margin': 'auto'}
@@ -402,11 +498,8 @@ page_3_layout = html.Div([
         html.Label('Selecionar Meses:', style={'font-weight': '700', 'font-size': '20px'}),
         dcc.Checklist(
             id='mes-comparacao-checklist',
-            options=[{'label': mes, 'value': mes} for mes in [
-                'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-                'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-            ]],
-            value=[],  # Iniciar sem seleção
+            options=[{'label': mes, 'value': mes} for mes in meses_completos],
+            value=['Junho', 'Julho', 'Agosto', 'Setembro'],  # Seleção inicial
             inline=True,
             labelStyle={'margin-right': '15px', 'font-size': '18px'}
         )
@@ -488,10 +581,7 @@ page_4_layout = html.Div([
         html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
         dcc.Dropdown(
             id='mes-melhores-anuncios-dropdown',
-            options=[{'label': mes, 'value': mes} for mes in [
-                'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-                'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-            ]],
+            options=[{'label': mes, 'value': mes} for mes in meses_completos],
             value='Agosto',
             clearable=False,
             style={'width': '50%', 'margin': 'auto'}
@@ -503,7 +593,7 @@ page_4_layout = html.Div([
         html.Div(id='tabela-melhores-anuncios')
     ], style={'margin-top': '30px', 'overflowX': 'auto', 'font-size': '18px'}),
     
-    # Imagem e caixa de observações
+    # Caixa de comentários e imagem (apenas para o mês selecionado)
     html.Div([
         dbc.Alert(
             id='comentario-melhores-anuncios-box',
@@ -531,10 +621,7 @@ page_5_layout = html.Div([
         html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
         dcc.Dropdown(
             id='mes-cliques-dropdown',
-            options=[{'label': mes, 'value': mes} for mes in [
-                'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-                'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-            ]],
+            options=[{'label': mes, 'value': mes} for mes in meses_completos],
             value='Agosto',
             clearable=False,
             style={'width': '50%', 'margin': 'auto'}
@@ -566,7 +653,7 @@ page_5_layout = html.Div([
           'background-color': secondary_color, 'padding': '20px', 
           'min-height': '100vh'})
 
-# Página 6: Valores Individuais de Cada Produto (sem gráfico)
+# Página 6: Valores Individuais de Cada Produto (sem destaque)
 page_6_layout = html.Div([
     html.H1("Valores Individuais de Cada Produto", className="text-center", 
             style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'}),
@@ -576,8 +663,8 @@ page_6_layout = html.Div([
         html.Label('Selecionar Produto:', style={'font-weight': '700', 'font-size': '20px'}),
         dcc.Dropdown(
             id='produto-select-dropdown',
-            options=[{'label': produto, 'value': produto} for produto in df_produtos['Produto']],
-            value='Kit Plantio',
+            options=[{'label': produto, 'value': produto} for produto in df_produtos['Produto'].unique()],
+            value='Kit Plantio',  # Valor inicial
             clearable=False,
             style={'width': '50%', 'margin': 'auto'}
         )
@@ -611,53 +698,52 @@ page_6_layout = html.Div([
           'background-color': secondary_color, 'padding': '20px', 
           'min-height': '100vh'})
 
+# Dados de Funil de Vendas (Junho a Setembro)
+dados_funil = {
+    'Mês': meses_completos,
+    'Leads Frios': [0] * 12,
+    'Atendidos': [0] * 12,
+    'Conversões': [0] * 12
+}
+
+# Definir dados para Agosto e Setembro
+dados_funil['Leads Frios'][meses_completos.index('Agosto')] = 1371
+dados_funil['Atendidos'][meses_completos.index('Agosto')] = 635
+dados_funil['Conversões'][meses_completos.index('Agosto')] = 61
+
+dados_funil['Leads Frios'][meses_completos.index('Setembro')] = 0
+dados_funil['Atendidos'][meses_completos.index('Setembro')] = 0
+dados_funil['Conversões'][meses_completos.index('Setembro')] = 0
+
+df_funil = pd.DataFrame(dados_funil)
+
+# Convertendo o DataFrame para um formato longo adequado para o gráfico de barras
+df_funil_long = df_funil.melt(id_vars=['Mês'], var_name='Etapa', value_name='Quantidade')
+
 # Página 7: Funil de Vendas
 page_7_layout = html.Div([
     html.H1("Funil de Vendas", className="text-center", 
             style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'}),
     
-    # Tabela do Funil de Vendas
+    # Seletor de Mês
     html.Div([
-        gerar_tabela(pd.DataFrame({
-            'Etapa': ['Leads Frios', 'Atendidos', 'Conversões'],
-            'Quantidade': [1371, 635, 61]
-        }))
-    ], style={'margin-top': '30px', 'margin-bottom': '30px', 'font-size': '18px'}),
-    
-    # Gráfico de Funil de Vendas em Barras (Horizontal)
-    html.Div([
-        dcc.Graph(
-            id='grafico-funil',
-            figure=px.bar(
-                pd.DataFrame({
-                    'Etapa': ['Leads Frios', 'Atendidos', 'Conversões'],
-                    'Quantidade': [1371, 635, 61]
-                }),
-                y='Etapa',
-                x='Quantidade',
-                orientation='h',
-                title='Funil de Vendas',
-                color='Etapa',
-                color_discrete_sequence=px.colors.qualitative.Pastel,
-                text='Quantidade'
-            ).update_traces(texttemplate='%{text}', textposition='outside')
-             .update_layout(
-                title={'text': 'Funil de Vendas', 'x':0.5, 'y':0.95, 'xanchor': 'center', 'yanchor': 'top', 'font': {'color': primary_color}},
-                yaxis_title='Etapa',
-                xaxis_title='Quantidade',
-                plot_bgcolor=secondary_color,
-                paper_bgcolor=secondary_color,
-                font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
-                xaxis=dict(range=[0, max([1371, 635, 61]) * 1.2]),
-                showlegend=False
-             )
+        html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
+        dcc.Dropdown(
+            id='seletor-mes-funil',
+            options=[{'label': mes, 'value': mes} for mes in meses_completos],
+            value='Agosto',  # Valor inicial selecionado
+            clearable=False,
+            style={'width': '50%', 'margin': 'auto'}
         )
+    ], style={'text-align': 'center', 'margin-top': '20px'}),
+    
+    # Gráfico de Funil de Vendas em Barras (Horizontal) que será atualizado pelo callback
+    html.Div([
+        dcc.Graph(id='grafico-funil')
     ], style={'height': '600px', 'margin-bottom': '20px'}),
     
-    # Taxa de Conversão destacada
-    html.Div([
-        html.H4(f"Taxa de Conversão: {(61/635)*100:.2f}%", style={'color': '#006400', 'text-align': 'center', 'font-size': '24px', 'margin-top': '10px'})
-    ]),
+    # Taxa de Conversão destacada para o mês selecionado (inicialmente agosto)
+    html.Div(id='taxa-conversao', style={'text-align': 'center', 'font-size': '24px', 'margin-top': '10px'}),
     
     # Caixa de texto explicativo
     html.Div([
@@ -672,7 +758,7 @@ page_7_layout = html.Div([
             'border-radius': '5px',
             'background-color': '#FFFFFF',
             'max-width': '800px',
-            'margin': 'auto'
+            'margin': '20px auto'
         })
     ], style={'margin-top': '20px'}),
     
@@ -826,18 +912,12 @@ def atualizar_tabela_desempenho(mes_selecionado):
         for metrica in metricas:
             valor = df_mes[df_mes['Plataforma'] == plataforma][metrica].values
             if valor.size > 0 and not pd.isna(valor[0]):
-                valores.append(valor[0])
+                valores.append(formatar_valor(metrica=metrica, valor=valor[0]))
             else:
                 valores.append('')  # Substituir valores ausentes por string vazia
         dados_tabela[f'{plataforma}'] = valores
     
     df_tabela = pd.DataFrame(dados_tabela)
-    
-    # Formatar os valores (aplicação manual por você)
-    for plataforma in ['Facebook Ads', 'Google Ads']:
-        df_tabela[plataforma] = df_tabela.apply(
-            lambda row: row[plataforma], axis=1  # Removi a formatação para inserção manual
-        )
     
     # Calcular os totais de gastos
     total_facebook = df_desempenho[
@@ -881,14 +961,10 @@ def update_graphs(meses_selecionados):
         df_plot = df_filtrado[['Plataforma', 'Mês', metrica]].dropna()
         
         # Adicionar meses sem dados com valor 0
-        meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
-                 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+        meses = meses_selecionados  # Apenas os selecionados
         plataformas = ['Facebook Ads', 'Google Ads']
         complete_data = pd.DataFrame([(plataforma, mes) for plataforma in plataformas for mes in meses], columns=['Plataforma', 'Mês'])
         df_plot = complete_data.merge(df_filtrado[['Plataforma', 'Mês', metrica]], on=['Plataforma', 'Mês'], how='left').fillna(0)
-        
-        # Filtrar apenas os meses selecionados
-        df_plot = df_plot[df_plot['Mês'].isin(meses_selecionados)]
         
         # Agregar valores por mês e plataforma
         df_agg = df_plot.groupby(['Mês', 'Plataforma'], as_index=False).sum()
@@ -901,7 +977,7 @@ def update_graphs(meses_selecionados):
             barmode='group',
             title=f"{metrica} - {', '.join(meses_selecionados)}",
             labels={metrica: metrica, 'Mês': 'Mês'},
-            height=400
+            height=300  # Reduzido o height para tornar os gráficos mais finos
         )
         fig.update_layout(
             plot_bgcolor=secondary_color,
@@ -915,17 +991,26 @@ def update_graphs(meses_selecionados):
             html.H4(metrica, className="text-center", 
                     style={'color': primary_color, 'font-size': '24px'}),
             dcc.Graph(figure=fig)
-        ]))
+        ], style={'margin-bottom': '30px'}))
     
     # Gerar comentários com base nos meses selecionados
     comentarios = []
     for mes in meses_selecionados:
-        comentario_text = f"Comentário para {mes}: [Tivemos um grande aumento nas impressões devido ao investimento alto em feiras]"
+        if mes == 'Agosto':
+            comentario_text = f"Comentário para {mes}: No mês de Agosto tivemos uma alta no CTR devido ao investimento alto e campanhas para feiras com objetivo de engajamento"
+        elif mes == 'Setembro':
+            comentario_text = f"Comentário para {mes}: Setembro apresentou uma baixa no CTR comparado com mês de Agosto devido a feira, mas se comparar com Julho ainda estamos em alta"
+        elif mes == 'Junho':
+            comentario_text = f"Comentário para {mes}: Tivemos um aumento constante no CTR mês a mês, resultado de anúncios mais claros e objetivos. As copys foram ajustadas para comunicar soluções diretas aos problemas do público"
+        elif mes == 'Julho':
+            comentario_text = f"Comentário para {mes}: "
+        else:
+            comentario_text = f"Comentário para {mes}: [Comentários específicos para {mes}]."
         comentarios.append(html.Li(comentario_text, style={'font-size': '18px'}))
     comentario_list = html.Ul(comentarios, style={'list-style-type': 'disc', 'margin-left': '20px'})
     
     return graficos, html.Div([
-        html.H4("Explicação das Métricas", style={'text-align': 'center'}),
+        html.H4("Comentários sobre os Meses Selecionados", style={'text-align': 'center'}),
         comentario_list
     ]), True
 
@@ -937,11 +1022,14 @@ def update_graphs(meses_selecionados):
     [Input('mes-melhores-anuncios-dropdown', 'value')]
 )
 def atualizar_melhores_anuncios(mes_selecionado):
-    # Filtrar os dados para o mês selecionado
-    df_filtrado = df_melhores_anuncios[df_melhores_anuncios['Mês'] == mes_selecionado]
+    # Filtrar os dados para o mês selecionado e CTR > 0
+    df_filtrado = df_melhores_anuncios[
+        (df_melhores_anuncios['Mês'] == mes_selecionado) & 
+        (df_melhores_anuncios['CTR (%)'] > 0)
+    ]
     
     if df_filtrado.empty:
-        # Sem dados para outros meses
+        # Sem dados para o mês selecionado
         tabela = gerar_tabela(pd.DataFrame({
             'Anúncio': [],
             'CTR (%)': []
@@ -949,12 +1037,31 @@ def atualizar_melhores_anuncios(mes_selecionado):
         comentario = f"Não há dados disponíveis para o mês de {mes_selecionado}."
         return tabela, comentario, True
     else:
-        # Tabela de melhores anúncios
-        tabela = gerar_tabela(df_filtrado[['Anúncio', 'CTR (%)']])
+        # Tabela de melhores anúncios para o mês selecionado com CTR formatado
+        df_tabela = df_filtrado[['Anúncio', 'CTR (%)']].copy()
+        df_tabela['CTR (%)'] = df_tabela['CTR (%)'].apply(lambda x: formatar_valor('CTR (%)', x))
+        tabela = gerar_tabela(df_tabela)
         
-        # Imagem e comentário do mês
-        imagem_url = df_melhores_anuncios['Imagem'].iloc[0]
-        comentario_text = f"Comentário para {mes_selecionado}: [Tivemos um aumento constante no CTR mês a mês, resultado de anúncios mais claros e objetivos. As copys foram ajustadas para comunicar soluções diretas aos problemas do público.]"
+        # Selecionar a imagem correspondente ao mês
+        imagem_url = df_filtrado['Imagem'].iloc[0] if not df_filtrado.empty else imagem_placeholder
+        
+        # Comentário para o mês selecionado
+        if mes_selecionado == 'Agosto':
+            comentario_text = (
+                f"Comentário para {mes_selecionado}: Tivemos um bom desempenho nos anúncios, "
+                f"o CTR se destacou em várias campanhas."
+            )
+        elif mes_selecionado == 'Setembro':
+            # Calcular a média de CTR para o comentário
+            media_ctr = df_filtrado['CTR (%)'].mean()
+            comentario_text = (
+                f"Comentário para {mes_selecionado}: Setembro apresentou desafios com menor CTR "
+                f"de {media_ctr}% devido a ajustes nas estratégias de anúncios."
+            )
+        else:
+            comentario_text = f"Comentário para {mes_selecionado}: [Comentários específicos para {mes_selecionado}]."
+        
+        # Renderizar a imagem e o comentário
         imagem = html.Img(
             src=imagem_url,
             style={
@@ -982,29 +1089,24 @@ def atualizar_melhores_anuncios(mes_selecionado):
     [Input('mes-cliques-dropdown', 'value')]
 )
 def update_cliques_pais(mes_selecionado):
-    if mes_selecionado != 'Agosto':
-        # Sem dados para outros meses
-        fig = px.bar(title=f"Cliques por Estado - {mes_selecionado} (Sem dados)")
-        fig.update_layout(
-            plot_bgcolor=secondary_color,
-            paper_bgcolor=secondary_color,
-            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
-            title_x=0.5
-        )
-        comentario_text = f"Não há dados disponíveis para o mês de {mes_selecionado}."
-        return fig, comentario_text, True
-    else:
-        # Criar o gráfico de pizza para agosto
-        fig = criar_grafico_cliques_estado(mes_selecionado)
-        
-        # Caixa de comentário baseada no mês selecionado
+    # Criar o gráfico de cliques por estado
+    fig = criar_grafico_cliques_estado(mes_selecionado)
+    
+    # Comentários personalizados para cada mês
+    if mes_selecionado == 'Agosto':
         comentario_text = "Em agosto, a participação em feiras nos estados do PR e RS aumentaram significativamente os cliques provenientes dessas regiões."
-        
-        comentario = html.Div([
-            html.P(comentario_text, style={'font-size': '18px', 'text-align': 'center'})
-        ])
-        
-        return fig, comentario, True
+    elif mes_selecionado == 'Setembro':
+        comentario_text = "Em setembro, observamos uma queda nos cliques devido à menor presença em eventos físicos."
+    elif mes_selecionado == 'Junho':
+        comentario_text = "Em junho, tivemos um começo de campanha com um bom número de cliques provenientes de diferentes estados."
+    elif mes_selecionado == 'Julho':
+        comentario_text = "Em julho, mantivemos um fluxo estável de cliques, com destaque para as campanhas em Santa Catarina."
+    else:
+        comentario_text = f"Não há dados disponíveis para o mês de {mes_selecionado}."
+    
+    comentario = html.Div([html.P(comentario_text, style={'font-size': '18px', 'text-align': 'center'})])
+    
+    return fig, comentario, True
 
 # Callback para atualizar a tabela de produtos com base no produto selecionado
 @app.callback(
@@ -1016,9 +1118,6 @@ def atualizar_tabela_produtos(produto_selecionado):
     df_produto_formatado = formatar_valores(df_produto)
     return gerar_tabela(df_produto_formatado)
 
-# Callback para atualizar o gráfico de produtos (REMOVIDO)
-# Removido conforme solicitado
-
 # Callback para atualizar o gráfico de média dos totais (agora incluindo plataformas separadas)
 @app.callback(
     Output('grafico-media-totais', 'figure'),
@@ -1028,6 +1127,66 @@ def update_grafico_media(metrica_selecionada):
     fig = criar_grafico_media_totais(metrica_selecionada)
     return fig
 
+# Callback para atualizar o gráfico e a taxa de conversão no Funil de Vendas
+@app.callback(
+    [Output('grafico-funil', 'figure'),
+     Output('taxa-conversao', 'children')],
+    [Input('seletor-mes-funil', 'value')]
+)
+def update_funil(mes_selecionado):
+    # Filtrar os dados para o mês selecionado
+    df_mes = df_funil[df_funil['Mês'] == mes_selecionado]
+    
+    if df_mes.empty or (df_mes[['Leads Frios', 'Atendidos', 'Conversões']].sum(axis=1).values[0] == 0):
+        fig = px.bar(title=f"Funil de Vendas - {mes_selecionado} (Sem dados)")
+        fig.update_layout(
+            plot_bgcolor=secondary_color,
+            paper_bgcolor=secondary_color,
+            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
+            title_x=0.5
+        )
+        taxa_conversao_text = "Taxa de Conversão: N/A"
+    else:
+        # Criar o gráfico de funil (barra horizontal) ordenado do maior para o menor
+        df_funil_plot = df_mes.melt(id_vars=['Mês'], var_name='Etapa', value_name='Quantidade')
+        etapas_order = ['Leads Frios', 'Atendidos', 'Conversões']
+        df_funil_plot['Etapa'] = pd.Categorical(df_funil_plot['Etapa'], categories=etapas_order, ordered=True)
+        df_funil_plot = df_funil_plot.sort_values('Etapa')
+        
+        # Definir cores para cada etapa
+        cores = {'Leads Frios': '#FFA07A', 'Atendidos': '#20B2AA', 'Conversões': '#3CB371'}
+        
+        fig = px.bar(
+            df_funil_plot,
+            y='Etapa',
+            x='Quantidade',
+            orientation='h',
+            title=f"Funil de Vendas - {mes_selecionado}",
+            labels={'Quantidade': 'Quantidade', 'Etapa': 'Etapa'},
+            color='Etapa',
+            color_discrete_map=cores,
+            height=400,
+            text='Quantidade'  # Adiciona as quantidades sobre as barras
+        )
+        fig.update_layout(
+            plot_bgcolor=secondary_color,
+            paper_bgcolor=secondary_color,
+            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
+            title_x=0.5
+        )
+        
+        fig.update_traces(textposition='auto')  # Ajusta a posição do texto
+        
+        # Calcular a Taxa de Conversão
+        leads_frios = df_mes['Leads Frios'].values[0]
+        atendidos = df_mes['Atendidos'].values[0]
+        conversoes = df_mes['Conversões'].values[0]
+        
+        taxa_conversao = (conversoes / atendidos) * 100 if atendidos > 0 else 0.0
+        taxa_conversao_text = f"Taxa de Conversão: {taxa_conversao:.2f}%"
+    
+    return fig, taxa_conversao_text
+
 # Rodar o servidor com host='0.0.0.0' para permitir conexões externas
 if __name__ == '__main__':
-    app.run_server(debug=True, host='0.0.0.0', port=8050)
+    app.run_server(debug=False, host='0.0.0.0', port=8050)
