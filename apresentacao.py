@@ -267,59 +267,75 @@ def gerar_tabela(df):
     )
 
 # Função para gerar a tabela de desempenho com totais
-def gerar_tabela_desempenho(df, total_facebook, total_google, total_spend):
+# Função para gerar a tabela de desempenho com totais e espaçamento refinado
+# Função para gerar a tabela de desempenho com totais e espaçamento refinado
+# Função para gerar a tabela de desempenho com totais e espaçamento refinado
+def gerar_tabela_desempenho(df, total_facebook, total_google, total_spend, total_resultado):
     tabela = gerar_tabela(df)
-    # Cards de totais utilizando Row e Col em vez de CardDeck
+
+    # Ajustar o tamanho e estilo dos cards de totais com mais espaçamento entre eles
     cards = dbc.Row([
         dbc.Col([
             dbc.Card([
                 dbc.CardBody([
-                    html.H5("Total gasto no Facebook Ads", className="card-title"),
-                    html.P(f"R$ {total_facebook:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
-                           className="card-text")
+                    html.H5("Total gasto no Facebook Ads", className="card-title", style={'font-size': '12px'}),
+                    html.P(f"R$ {total_facebook:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), 
+                           className="card-text", style={'font-size': '12px'})
                 ])
-            ], color="success", inverse=True, style={'width': '18rem', 'margin-bottom': '10px'})
-        ], md=4),
+            ], color="success", inverse=True, style={'width': '10rem', 'padding': '5px', 'margin': '10px'})  # Ajuste de margem e largura menor
+        ], width='auto'),
         dbc.Col([
             dbc.Card([
                 dbc.CardBody([
-                    html.H5("Total gasto no Google Ads", className="card-title"),
-                    html.P(f"R$ {total_google:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
-                           className="card-text")
+                    html.H5("Total gasto no Google Ads", className="card-title", style={'font-size': '12px'}),
+                    html.P(f"R$ {total_google:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), 
+                           className="card-text", style={'font-size': '12px'})
                 ])
-            ], color="danger", inverse=True, style={'width': '18rem', 'margin-bottom': '10px'})
-        ], md=4),
+            ], color="danger", inverse=True, style={'width': '10rem', 'padding': '5px', 'margin': '10px'})  # Ajuste de margem e largura menor
+        ], width='auto'),
         dbc.Col([
             dbc.Card([
                 dbc.CardBody([
-                    html.H5("Total Investido", className="card-title"),
-                    html.P(f"R$ {total_spend:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
-                           className="card-text")
+                    html.H5("Total Investido", className="card-title", style={'font-size': '12px'}),
+                    html.P(f"R$ {total_spend:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), 
+                           className="card-text", style={'font-size': '12px'})
                 ])
-            ], color="info", inverse=True, style={'width': '18rem'})
-        ], md=4)
-    ], className="mb-4", justify='start')  # Alinhado à esquerda
+            ], color="info", inverse=True, style={'width': '10rem', 'padding': '5px', 'margin': '10px'})  # Ajuste de margem e largura menor
+        ], width='auto'),
+        dbc.Col([
+            dbc.Card([
+                dbc.CardBody([
+                    html.H5("Total de Resultados", className="card-title", style={'font-size': '12px'}),
+                    html.P(f"{total_resultado}", className="card-text", style={'font-size': '12px'})  # Valor de total_resultado
+                ])
+            ], color="primary", inverse=True, style={'width': '10rem', 'padding': '5px', 'margin': '10px'})  # Ajuste de margem e largura menor
+        ], width='auto')
+    ], className="mb-4", justify='center')  # Centralizando os cards
 
-    # Container para posicionar os totais no canto inferior esquerdo
-    # Usando fixed position e ajustando a posição para evitar sobreposição
-    cards_fixed = html.Div([
-        cards
-    ], style={
+    # Container fixo para centralizar os cards na parte inferior
+    cards_fixed = html.Div([cards], style={
         'position': 'fixed',
-        'bottom': '80px',  # Aumentei a margem para subir as caixas
-        'left': '20px',
-        'zIndex': '1000'
+        'bottom': '20px',  # Alinhar os cards ao canto inferior
+        'left': '50%',  # Centralizar horizontalmente
+        'transform': 'translateX(-50%)',  # Centralizar no meio da tela
+        'zIndex': '1000',
+        'display': 'flex',
+        'justify-content': 'center',  # Espaçamento centralizado
+        'align-items': 'center',
+        'flex-wrap': 'nowrap',  # Manter todos os elementos em uma linha
+        'gap': '20px'  # Espaçamento entre os elementos
     })
 
     # Container para a tabela e os cards
-    return html.Div([
-        tabela,
-        cards_fixed
-    ], style={'position': 'relative', 'height': 'auto'})
+    return html.Div([tabela, cards_fixed], style={'position': 'relative', 'height': 'auto'})
 
 # Função para criar o gráfico de média dos totais (incluindo Google Ads e Facebook Ads)
 def criar_grafico_media_totais(metrica_selecionada):
     meses = meses_completos
+
+    # Verificar se df_desempenho está definido
+    if 'df_desempenho' not in globals():
+        return html.Div("Erro: Dados de desempenho não disponíveis", style={'color': 'red'})
 
     # Agregar os valores por mês e plataforma
     df_plot = df_desempenho.groupby(['Mês', 'Plataforma'], as_index=False)[metrica_selecionada].sum()
@@ -350,6 +366,8 @@ def criar_grafico_media_totais(metrica_selecionada):
     fig.update_traces(texttemplate='%{y}', textposition='outside')
     
     return fig
+
+
 
 # Função para criar o gráfico de cliques por estado para vários meses
 def criar_grafico_cliques_estado(mes_selecionado):
@@ -711,8 +729,8 @@ dados_funil['Leads Frios'][meses_completos.index('Agosto')] = 1371
 dados_funil['Atendidos'][meses_completos.index('Agosto')] = 635
 dados_funil['Conversões'][meses_completos.index('Agosto')] = 61
 
-dados_funil['Leads Frios'][meses_completos.index('Setembro')] = 0
-dados_funil['Atendidos'][meses_completos.index('Setembro')] = 0
+dados_funil['Leads Frios'][meses_completos.index('Setembro')] = 943
+dados_funil['Atendidos'][meses_completos.index('Setembro')] = 622
 dados_funil['Conversões'][meses_completos.index('Setembro')] = 0
 
 df_funil = pd.DataFrame(dados_funil)
@@ -893,7 +911,7 @@ def display_page(pathname):
     else:
         return page_1_layout
 
-# Callback para atualizar a tabela de desempenho com base no mês selecionado
+# Correção de imports duplicados
 @app.callback(
     Output('tabela-desempenho', 'children'),
     [Input('mes-desempenho-dropdown', 'value')]
@@ -933,11 +951,28 @@ def atualizar_tabela_desempenho(mes_selecionado):
     total_google = total_google[0] if total_google.size > 0 and not pd.isna(total_google[0]) else 0.0
     
     total_spend = total_facebook + total_google
-    
+
+    # Calcular o Total de Resultados (soma dos resultados de Facebook e Google)
+    total_resultado_facebook = df_desempenho[
+        (df_desempenho['Mês'] == mes_selecionado) & 
+        (df_desempenho['Plataforma'] == 'Facebook Ads')
+    ]['Resultados'].values
+    total_resultado_facebook = total_resultado_facebook[0] if total_resultado_facebook.size > 0 and not pd.isna(total_resultado_facebook[0]) else 0
+
+    total_resultado_google = df_desempenho[
+        (df_desempenho['Mês'] == mes_selecionado) & 
+        (df_desempenho['Plataforma'] == 'Google Ads')
+    ]['Resultados'].values
+    total_resultado_google = total_resultado_google[0] if total_resultado_google.size > 0 and not pd.isna(total_resultado_google[0]) else 0
+
+    total_resultado = total_resultado_facebook + total_resultado_google
+
     # Gerar a tabela com os dados e totais
-    tabela = gerar_tabela_desempenho(df_tabela, total_facebook, total_google, total_spend)
+    tabela = gerar_tabela_desempenho(df_tabela, total_facebook, total_google, total_spend, total_resultado)
     
     return tabela
+
+
 
 # Callback para atualizar os gráficos e comentários na página de comparação de meses
 @app.callback(
@@ -1055,7 +1090,7 @@ def atualizar_melhores_anuncios(mes_selecionado):
             # Calcular a média de CTR para o comentário
             media_ctr = df_filtrado['CTR (%)'].mean()
             comentario_text = (
-                f"Comentário para {mes_selecionado}: Setembro apresentou desafios com menor CTR "
+                f"Comentário para {mes_selecionado}:  "
                 f"de {media_ctr}% devido a ajustes nas estratégias de anúncios."
             )
         else:
