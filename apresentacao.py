@@ -9,6 +9,10 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
+ordem_meses = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+]
 def botoes_navegacao(prev_href, next_href):
     return html.Div([
         dbc.Button(
@@ -388,7 +392,14 @@ def formatar_valor(metrica, valor):
         # Caso haja algum erro de conversão, retornar string vazia
         return ''
 
-
+mapa_metricas_firebase = {
+    'Impressões': 'Impressoes',
+    'Cliques no link': 'Cliques_no_link',
+    'Resultados': 'Resultados',
+    'Orçamento (R$)': 'Orcamento',
+    'CTR (%)': 'CTR',
+    'CPL (R$)': 'CPL'
+}
 # Função para gerar a tabela com estilos aprimorados
 def gerar_tabela(df):
     return dbc.Table.from_dataframe(
@@ -1767,15 +1778,16 @@ public_page_7_layout = html.Div([
           'background-color': secondary_color, 'padding': '20px', 
           'min-height': '100vh'})
 
+# Página 8: Média dos Totais de Desempenho de Facebook e Google Ads com Comparação de Métricas (/page-8)
 public_page_8_layout = html.Div([
-    html.H1("Média dos Totais de Desempenho de Facebook e Google Ads", className="text-center", 
+    html.H1("Comparação de Métricas de Desempenho de Facebook e Google Ads", className="text-center", 
             style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'}),
     
-    # Seletor de Métrica
+    # Seletor de Métricas para Comparação
     html.Div([
-        html.Label('Selecionar Métrica:', style={'font-weight': '700', 'font-size': '20px'}),
+        html.Label('Selecionar Métricas para Comparação:', style={'font-weight': '700', 'font-size': '20px'}),
         dcc.Dropdown(
-            id='seletor-metrica-media',
+            id='seletor-metricas-comparacao',
             options=[
                 {'label': 'Impressões', 'value': 'Impressões'},
                 {'label': 'Cliques no link', 'value': 'Cliques no link'},
@@ -1784,24 +1796,295 @@ public_page_8_layout = html.Div([
                 {'label': 'CTR (%)', 'value': 'CTR (%)'},
                 {'label': 'CPL (R$)', 'value': 'CPL (R$)'}
             ],
-            value='Impressões',
-            clearable=False,
-            style={'width': '50%', 'margin': 'auto'}
+            value=['Impressões', 'Cliques no link'],  # Seleção inicial de duas métricas
+            multi=True,
+            style={'width': '60%', 'margin': 'auto'}
         )
     ], style={'text-align': 'center', 'margin-top': '20px', 'margin-bottom': '20px'}),
     
-    # Gráfico único com 12 barras verticais para cada plataforma
+    # Contêiner para Gráficos Comparativos Dinâmicos
     html.Div([
-        dcc.Graph(
-            id='grafico-media-totais'
-        )
-    ], style={'overflowX': 'auto'}),
+        # Gráficos serão inseridos aqui dinamicamente pelo callback
+    ], id='grafico-comparacao-container', style={'margin-bottom': '20px'}),
     
-    # Botões de navegação
+    # Botões de Navegação
     botoes_navegacao(prev_href='/page-7', next_href='/')
-], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif', 
-          'background-color': secondary_color, 'padding': '20px', 
-          'min-height': '100vh'})
+], style={
+    'color': '#343a40', 
+    'font-family': 'Montserrat, sans-serif', 
+    'background-color': secondary_color, 
+    'padding': '20px', 
+    'min-height': '100vh'
+})
+@app.callback(
+    Output('grafico-comparacao-container', 'children'),
+    [Input('seletor-metricas-comparacao', 'value')]
+)
+def atualizar_graficos_comparacao(metricas_selecionadas):
+    # Lista completa de meses de janeiro a dezembro
+    ordem_meses = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ]
+    
+    # Verifica se há métricas selecionadas
+    if not metricas_selecionadas:
+        # Retornar mensagem solicitando seleção de métricas
+        return html.Div("Selecione pelo menos uma métrica para comparação.", style={'text-align': 'center', 'font-size': '20px', 'color': 'red'})
+    
+    # Função para buscar dados do Firebase para uma métrica específica
+    def get_dados_metricas(metrica):
+        try:
+            # Mapeamento da métrica para a chave no Firebase
+            chave_firebase = mapa_metricas_firebase.get(metrica)
+            if not chave_firebase:
+                logging.warning(f"Métrica '{metrica}' não mapeada no Firebase.")
+                return pd.DataFrame()
+            
+            # Acessar a estrutura 'desempenho/{mes}/{plataforma}/{chave_firebase}' no Firebase
+            dados_desempenho = db.child("desempenho").get().val()
+            
+            if not dados_desempenho:
+                logging.warning("Nenhum dado encontrado em 'desempenho'.")
+                return pd.DataFrame()
+            
+            # Lista para armazenar os dados
+            dados_list = []
+            
+            for mes in ordem_meses:
+                plataformas = dados_desempenho.get(mes, {})
+                for plataforma in ['Facebook Ads', 'Google Ads']:
+                    metrics = plataformas.get(plataforma, {})
+                    valor = metrics.get(chave_firebase, 0)
+                    if valor is None:
+                        valor = 0
+                    # Assegura que o valor é numérico
+                    try:
+                        valor = float(valor)
+                    except (ValueError, TypeError):
+                        valor = 0.0
+                    dados_list.append({
+                        'Mês': mes,
+                        'Plataforma': plataforma,
+                        'Valor': valor
+                    })
+            
+            # Converter para DataFrame
+            df_metricas = pd.DataFrame(dados_list)
+            
+            return df_metricas
+        
+        except Exception as e:
+            logging.error(f"Erro ao buscar dados para a métrica '{metrica}': {e}")
+            return pd.DataFrame()
+    
+    # Lista para armazenar os componentes dos gráficos
+    componentes_graficos = []
+    
+    for metrica in metricas_selecionadas:
+        df = get_dados_metricas(metrica)
+        
+        if df.empty:
+            # Adicionar mensagem se não houver dados para a métrica
+            componentes_graficos.append(
+                html.Div(f"Nenhum dado disponível para a métrica: {metrica}", style={'text-align': 'center', 'color': 'orange', 'font-size': '18px', 'margin-bottom': '20px'})
+            )
+            continue
+        
+        # Criar o gráfico de barras para a métrica
+        fig = px.bar(
+            df,
+            x='Mês',
+            y='Valor',
+            color='Plataforma',
+            barmode='group',
+            title=f"{metrica} - Comparação de Todos os Meses",
+            labels={'Valor': metrica, 'Mês': 'Mês'},
+            height=400
+        )
+        
+        # Atualizar layout do gráfico
+        fig.update_layout(
+            plot_bgcolor=secondary_color,
+            paper_bgcolor=secondary_color,
+            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
+            title_x=0.5
+        )
+        
+        # Adicionar formatação aos valores das barras
+        if "R$" in metrica:
+            text_template = 'R$ %{y:,.2f}'
+        elif "%" in metrica:
+            text_template = '%{y:.2f}%'
+        else:
+            text_template = '%{y:,}'  # Formato para números inteiros (como Impressões)
+            df['Valor'] = df['Valor'].astype(int)
+        
+        fig.update_traces(texttemplate=text_template, textposition='outside')
+        
+        # Adicionar o gráfico ao contêiner de gráficos
+        componentes_graficos.append(
+            html.Div([
+                dcc.Graph(figure=fig)
+            ], style={'margin-bottom': '40px'})
+        )
+    
+    return componentes_graficos
+def get_dados_metricas(metrica):
+    """
+    Busca os dados da métrica especificada no Firebase e retorna um DataFrame.
+    
+    Parâmetros:
+    - metrica (str): Nome da métrica a ser buscada.
+    
+    Retorna:
+    - pd.DataFrame: DataFrame contendo os dados da métrica.
+    """
+    try:
+        # Mapeamento da métrica para a chave no Firebase
+        chave_firebase = mapa_metricas_firebase.get(metrica)
+        if not chave_firebase:
+            logging.warning(f"Métrica '{metrica}' não mapeada no Firebase.")
+            return pd.DataFrame()
+        
+        # Acessar a estrutura 'desempenho/{mes}/{plataforma}/{chave_firebase}' no Firebase
+        dados_desempenho = db.child("desempenho").get().val()
+        logging.info(f"Dados de desempenho para a métrica '{metrica}': {dados_desempenho}")
+        
+        if not dados_desempenho:
+            logging.warning("Nenhum dado encontrado em 'desempenho'.")
+            return pd.DataFrame()
+        
+        # Lista para armazenar os dados
+        dados_list = []
+        
+        for mes in ordem_meses:
+            plataformas = dados_desempenho.get(mes, {})
+            for plataforma in ['Facebook Ads', 'Google Ads']:
+                metrics = plataformas.get(plataforma, {})
+                valor = metrics.get(chave_firebase, 0)
+                logging.info(f"Mês: {mes}, Plataforma: {plataforma}, Métrica: {metrica}, Valor: {valor}")
+                if valor is None:
+                    valor = 0
+                # Assegura que o valor é numérico
+                try:
+                    valor = float(valor)
+                except (ValueError, TypeError):
+                    valor = 0.0
+                dados_list.append({
+                    'Mês': mes,
+                    'Plataforma': plataforma,
+                    'Valor': valor
+                })
+        
+        # Converter para DataFrame
+        df_metricas = pd.DataFrame(dados_list)
+        logging.info(f"DataFrame para a métrica '{metrica}':\n{df_metricas}")
+        
+        return df_metricas
+    
+    except Exception as e:
+        logging.error(f"Erro ao buscar dados para a métrica '{metrica}': {e}")
+        return pd.DataFrame()
+@app.callback(
+    Output('grafico-comparacao-metricas', 'figure'),
+    [Input('seletor-metricas-comparacao', 'value')]
+)
+def atualizar_grafico_comparacao(metricas_selecionadas):
+    if not metricas_selecionadas:
+        # Retornar gráfico vazio com mensagem
+        fig = px.bar(title="Selecione pelo menos uma métrica para comparação.")
+        fig.update_layout(
+            plot_bgcolor=secondary_color,
+            paper_bgcolor=secondary_color,
+            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
+            title_x=0.5
+        )
+        return fig
+    
+    # Função para buscar dados do Firebase para uma métrica específica
+    def get_dados_metricas(metrica):
+        try:
+            # Mapear a métrica para a chave do Firebase
+            chave_firebase = mapa_metricas_firebase.get(metrica)
+            if not chave_firebase:
+                logging.warning(f"Métrica '{metrica}' não mapeada no Firebase.")
+                return pd.DataFrame()
+            
+            # Acessar a estrutura 'desempenho/{mes}/{plataforma}/{chave_firebase}' no Firebase
+            dados_desempenho = db.child("desempenho").get().val()
+            
+            if not dados_desempenho:
+                logging.warning("Nenhum dado encontrado em 'desempenho'.")
+                return pd.DataFrame()
+            
+            # Lista para armazenar os dados
+            dados_list = []
+            
+            for mes, plataformas in dados_desempenho.items():
+                for plataforma, metrics in plataformas.items():
+                    valor = metrics.get(chave_firebase, 0)
+                    if valor is None:
+                        valor = 0
+                    dados_list.append({
+                        'Mês': mes,
+                        'Plataforma': plataforma,
+                        'Valor': valor
+                    })
+            
+            # Converter para DataFrame
+            df_metricas = pd.DataFrame(dados_list)
+            
+            return df_metricas
+        
+        except Exception as e:
+            logging.error(f"Erro ao buscar dados para a métrica '{metrica}': {e}")
+            return pd.DataFrame()
+    
+    # Criar o DataFrame para todas as métricas selecionadas
+    dfs = []
+    for metrica in metricas_selecionadas:
+        df = get_dados_metricas(metrica)
+        if not df.empty:
+            df['Métrica'] = metrica
+            dfs.append(df)
+    
+    if not dfs:
+        # Nenhum dado disponível para as métricas selecionadas
+        fig = px.bar(title="Dados insuficientes para as métricas selecionadas.")
+        fig.update_layout(
+            plot_bgcolor=secondary_color,
+            paper_bgcolor=secondary_color,
+            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
+            title_x=0.5
+        )
+        return fig
+    
+    # Concatenar todos os DataFrames
+    df_comparacao = pd.concat(dfs, ignore_index=True)
+    
+    # Plotar o gráfico com múltiplas métricas
+    fig = px.bar(
+        df_comparacao,
+        x='Mês',
+        y='Valor',
+        color='Plataforma',
+        facet_col='Métrica',  # Cada métrica em um facet separado
+        barmode='group',
+        title="Comparação de Métricas Selecionadas",
+        labels={'Valor': 'Valor', 'Mês': 'Mês'},
+        height=400 * len(metricas_selecionadas)  # Ajustar a altura com base no número de métricas
+    )
+    fig.update_layout(
+        plot_bgcolor=secondary_color,
+        paper_bgcolor=secondary_color,
+        font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
+        title_x=0.5
+    )
+    fig.update_traces(texttemplate='%{y:,}', textposition='outside')
+    
+    return fig
+
 @app.callback(
     Output('editar-cliques-feedback', 'children'),
     [Input('salvar-cliques-estado', 'n_clicks')],
