@@ -335,7 +335,7 @@ df_produtos = pd.DataFrame(dados_produtos)
 # Calcular ROI por produto, com tratamento para valores investidos iguais a 0
 df_produtos['ROI (%)'] = df_produtos.apply(
     lambda row: ((row['Retorno (R$)'] - row['Valor Investido (R$)']) / row['Valor Investido (R$)']) * 100 
-    if row['Valor Investido (R$)'] != 0 else -100.0,
+    if row['Valor Investido (R$)'] > 0 else 0.0,
     axis=1
 )
 
@@ -343,60 +343,23 @@ df_produtos['ROI (%)'] = df_produtos.apply(
 def formatar_valores(df):
     # Formatar colunas de valores numéricos para moeda
     df_formatado = df.copy()
-    for col in ['Valor Investido (R$)', 'Retorno (R$)', 'Orçamento (R$)']:
+    for col in ['Valor Investido (R$)', 'Retorno (R$)']:
         if col in df_formatado.columns:
             df_formatado[col] = df_formatado[col].apply(
                 lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") 
                 if isinstance(x, (int, float)) else x
             )
-    # Formatar CTR e CPL
-    if 'CTR (%)' in df_formatado.columns:
-        df_formatado['CTR (%)'] = df_formatado['CTR (%)'].apply(
-            lambda x: f"{float(x):.2f}%".replace(".", ",") 
-            if isinstance(x, (int, float)) else x
-        )
-    if 'CPL (R$)' in df_formatado.columns:
-        df_formatado['CPL (R$)'] = df_formatado['CPL (R$)'].apply(
-            lambda x: f"R$ {float(x):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") 
-            if isinstance(x, (int, float)) else x
+    # Formatar ROI
+    if 'ROI (%)' in df_formatado.columns:
+        df_formatado['ROI (%)'] = df_formatado['ROI (%)'].apply(
+            lambda x: f"{x:.2f}%"
         )
     return df_formatado
 
 # Aplicando a formatação de valores monetários
 df_produtos_formatado = formatar_valores(df_produtos)
 
-# Dados de cliques por estado (Agosto e Setembro)
-dados_estados = {
-    'Agosto': {
-        'Estado': [
-            'Rio Grande do Sul', 'Paraná', 'Santa Catarina', 'Minas Gerais', 'Goiás', 'São Paulo', 
-            'Mato Grosso', 'Tocantins', 'Atlântico', 'Maranhão', 'Distrito Federal', 
-            'Mato Grosso do Sul', 'Pará', 'Alto Paraná Department', 'Piauí',
-            'Itapúa Department', 'Central Department'
-        ],
-        'Cliques': [28788, 21854, 7365, 3749, 3319, 2985, 2672, 2420, 
-                    1796, 1775, 1192, 1104, 647, 584, 520, 485, 398]
-    },
-    'Setembro': {
-        'Estado': [
-            'Rio Grande do Sul', 'Minas Gerais', 'Paraná', 'São Paulo (state)', 'Santa Catarina', 
-            'Goiás', 'Mato Grosso', 'Tocantins', 'Federal District', 'Mato Grosso do Sul', 'Bahia', 
-            'Maranhão', 'Alto Paraná Department', 'Itapúa Department', 'Atlantico', 'Pará', 
-            'Caaguazú Department', 'Nuevo León', 'Canindeyú Department'
-        ],
-        'Cliques': [
-            8408, 2812, 2399, 2220, 2081, 1990, 1960, 1166, 1114, 1064, 824, 722, 
-            422, 294, 288, 264, 190, 115, 112
-        ]
-    }
-}
 
-df_estados = pd.DataFrame()
-
-for mes, dados in dados_estados.items():
-    df_mes_estados = pd.DataFrame(dados)
-    df_mes_estados['Mês'] = mes
-    df_estados = pd.concat([df_estados, df_mes_estados], ignore_index=True)
 
 # Função para formatar valores monetários conforme a métrica
 def formatar_valor(metrica, valor):
@@ -499,6 +462,25 @@ def gerar_tabela_desempenho(df, total_facebook, total_google, total_spend, total
     # Container para a tabela e os cards
     return html.Div([tabela, cards_fixed], style={'position': 'relative', 'height': 'auto'})
 
+def renomear_conversoes_para_vendas():
+    try:
+        funil_data = db.child("funil_vendas").get().val()
+        if not funil_data:
+            print("Nenhum dado encontrado para 'funil_vendas'.")
+            return
+        
+        for mes, dados in funil_data.items():
+            if 'Conversões' in dados:
+                vendas = dados.pop('Conversões')
+                dados['Vendas'] = vendas
+                db.child("funil_vendas").child(mes).update({'Vendas': vendas})
+                db.child("funil_vendas").child(mes).child('Conversões').remove()
+                print(f"Renomeado 'Conversões' para 'Vendas' no mês {mes}.")
+    except Exception as e:
+        print(f"Erro ao renomear 'Conversões' para 'Vendas': {e}")
+
+# Execute a função uma vez para renomear os dados existentes
+renomear_conversoes_para_vendas()
 # Função para criar o gráfico de média dos totais (incluindo Google Ads e Facebook Ads)
 def criar_grafico_media_totais(metrica_selecionada):
     try:
@@ -580,7 +562,7 @@ def criar_grafico_media_totais(metrica_selecionada):
             title_x=0.5
         )
         
-        # Formatar o texto nos eixos com `texttemplate` adequado
+        # Formatar o texto nos eixos com texttemplate adequado
         fig.update_traces(texttemplate=valor_formatado, textposition='outside')
         
         return fig
@@ -593,21 +575,25 @@ def criar_grafico_media_totais(metrica_selecionada):
 
 # Função para criar o gráfico de cliques por estado para vários meses
 def criar_grafico_cliques_estado(mes_selecionado):
-    # Filtrar os dados para o mês selecionado
-    df_mes = df_estados[df_estados['Mês'] == mes_selecionado]
-
-    if df_mes.empty:
-        # Sem dados para o mês selecionado
-        fig = px.bar(title=f"Cliques por Estado - {mes_selecionado} (Sem dados)")
-        fig.update_layout(
-            plot_bgcolor=secondary_color,
-            paper_bgcolor=secondary_color,
-            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
-            title_x=0.5
-        )
-        return fig
-    else:
-        # Criar o gráfico de pizza
+    try:
+        # Buscar os dados de cliques por estado para o mês selecionado no Firebase
+        cliques_data = db.child("cliques_por_estado").child(mes_selecionado).get().val()
+        
+        if not cliques_data:
+            # Sem dados para o mês selecionado
+            fig = px.pie(title=f"Cliques por Estado - {mes_selecionado} (Sem dados)")
+            fig.update_layout(
+                plot_bgcolor=secondary_color,
+                paper_bgcolor=secondary_color,
+                font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
+                title_x=0.5
+            )
+            return fig
+        
+        # Converter os dados em um DataFrame
+        df_mes = pd.DataFrame(list(cliques_data.items()), columns=['Estado', 'Cliques'])
+        
+        # Gerar o gráfico de pizza
         fig = px.pie(
             df_mes,
             names='Estado',
@@ -624,6 +610,21 @@ def criar_grafico_cliques_estado(mes_selecionado):
             title_x=0.5
         )
         
+        # Adicionar porcentagens no gráfico
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        
+        return fig
+
+    except Exception as e:
+        logging.error(f"Erro na função 'criar_grafico_cliques_estado': {e}")
+        # Retornar um gráfico vazio com mensagem de erro
+        fig = px.pie(title="Erro ao carregar os dados.")
+        fig.update_layout(
+            plot_bgcolor=secondary_color,
+            paper_bgcolor=secondary_color,
+            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
+            title_x=0.5
+        )
         return fig
 
 # Dados de Funil de Vendas (Junho a Setembro)
@@ -912,26 +913,219 @@ admin_page_3_layout = html.Div([
     # Navegação entre páginas administrativas
     botoes_navegacao(prev_href='/admin/page-2', next_href='/admin/page-4')
 ], style={'padding': '20px', 'background-color': secondary_color})
-
+admin_page_4_layout = html.Div([
+    html.H1("Admin: Editar Cliques por Estado", className="text-center", 
+            style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
+    
+    # Formulário de edição
+    dbc.Form([
+        # Selecionar Mês
+        dbc.Row([
+            dbc.Label("Mês:", html_for="edit-mes-cliques", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dcc.Dropdown(
+                    id='edit-mes-cliques',
+                    options=[{'label': mes, 'value': mes} for mes in meses_completos],
+                    value='Agosto',
+                    clearable=False,
+                    style={'font-size': '18px'}
+                ),
+                width=10,
+            ),
+        ], className="mb-3"),
+        
+        # Tabela para inserir estados e cliques
+        html.Div([
+            dash_table.DataTable(
+                id='tabela-cliques-estado',
+                columns=[
+                    {'name': 'Estado', 'id': 'estado', 'type': 'text', 'editable': True},
+                    {'name': 'Cliques', 'id': 'cliques', 'type': 'numeric', 'editable': True}
+                ],
+                data=[{'estado': '', 'cliques': 0} for _ in range(10)],  # Até 10 estados
+                row_deletable=False,
+                style_table={'overflowX': 'auto', 'width': '100%'},
+                style_cell={'textAlign': 'center', 'padding': '5px', 'font-family': 'Montserrat, sans-serif'},
+                style_header={'backgroundColor': primary_color, 'fontWeight': 'bold', 'color': 'white'},
+                style_data={'backgroundColor': '#f9f9f9'},
+                style_data_conditional=[
+                    {'if': {'row_index': 'odd'}, 'backgroundColor': '#e9e9e9'}
+                ]
+            )
+        ], style={'margin-top': '20px'}),
+        
+        # Botão de salvar
+        dbc.Button("Salvar", id="salvar-cliques-estado", color="primary", 
+                   style={'font-size': '18px', 'width': '100%', 'margin-top': '20px'}),
+    ], style={'width': '800px', 'margin': 'auto', 'margin-top': '50px'}),
+    
+    # Feedback de Edição
+    html.Div(id='editar-cliques-feedback', style={'text-align': 'center', 'margin-top': '10px'}),
+    
+    # Botões de navegação
+    botoes_navegacao(prev_href='/admin/page-3', next_href='/admin/page-5')
+], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif', 
+          'background-color': secondary_color, 'padding': '20px', 
+          'min-height': '100vh'})
+admin_page_5_layout = html.Div([
+    html.H1("Admin: Editar Valores Individuais de Cada Produto", className="text-center", 
+            style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
+    
+    # Formulário de edição
+    dbc.Form([
+        dbc.Row([
+            dbc.Label("Produto:", html_for="edit-produto", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dcc.Dropdown(
+                    id='edit-produto',
+                    options=[{'label': produto, 'value': produto} for produto in ['Kit Plantio', 'Turbo Mix', 'Vollverini', 'Best Mix', 'Nitro Mix']],
+                    value='Kit Plantio',
+                    clearable=False,
+                    style={'font-size': '18px'}
+                ),
+                width=10,
+            ),
+        ], className="mb-3"),
+        
+        dbc.Row([
+            dbc.Label("Mês:", html_for="edit-mes-produto", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dcc.Dropdown(
+                    id='edit-mes-produto',
+                    options=[{'label': mes, 'value': mes} for mes in meses_completos],
+                    value='Agosto',
+                    clearable=False,
+                    style={'font-size': '18px'}
+                ),
+                width=10,
+            ),
+        ], className="mb-3"),
+        
+        dbc.Row([
+            dbc.Label("Valor Investido (R$):", html_for="edit-valor-investido", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dbc.Input(type="number", id="edit-valor-investido", placeholder="Digite o valor investido", style={'font-size': '18px'}),
+                width=10,
+            ),
+        ], className="mb-3"),
+        
+        dbc.Row([
+            dbc.Label("Retorno (R$):", html_for="edit-retorno", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dbc.Input(type="number", id="edit-retorno", placeholder="Digite o retorno", style={'font-size': '18px'}),
+                width=10,
+            ),
+        ], className="mb-3"),
+        
+        # Botão de salvar
+        dbc.Button("Salvar", id="salvar-produto", color="primary", style={'font-size': '18px', 'width': '100%'}, className="mt-3")
+    ], style={'width': '600px', 'margin': 'auto', 'margin-top': '50px'}),
+    
+    # Feedback de Edição
+    html.Div(id='editar-produto-feedback', style={'text-align': 'center', 'margin-top': '10px'}),
+    
+    # Botões de navegação
+    botoes_navegacao(prev_href='/admin/page-4', next_href='/admin/page-6')
+], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif', 'background-color': secondary_color, 'padding': '20px', 'min-height': '100vh'})
+# Admin page 6 layout: Editar Funil de Vendas
+# Página Administrativa de Edição de Funil de Vendas (/admin/page-6)
+admin_page_6_layout = html.Div([
+    html.H1("Admin: Editar Funil de Vendas", className="text-center", 
+            style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
+    
+    # Formulário de edição
+    dbc.Form([
+        dbc.Row([
+            dbc.Label("Mês:", html_for="edit-mes-funil", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dcc.Dropdown(
+                    id='edit-mes-funil',
+                    options=[{'label': mes, 'value': mes} for mes in meses_completos],
+                    value='Agosto',
+                    clearable=False,
+                    style={'font-size': '18px'}
+                ),
+                width=10,
+            ),
+        ], className="mb-3"),
+        
+        dbc.Row([
+            dbc.Label("Leads Frios:", html_for="edit-leads-frios", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dbc.Input(type="number", id="edit-leads-frios", placeholder="Digite o número de Leads Frios", style={'font-size': '18px'}),
+                width=10,
+            ),
+        ], className="mb-3"),
+        
+        dbc.Row([
+            dbc.Label("Atendidos:", html_for="edit-atendidos", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dbc.Input(type="number", id="edit-atendidos", placeholder="Digite o número de Atendidos", style={'font-size': '18px'}),
+                width=10,
+            ),
+        ], className="mb-3"),
+        
+        dbc.Row([
+            dbc.Label("Vendas:", html_for="edit-vendas", width=2, style={'font-size': '20px'}),  # Alterado de Conversões para Vendas
+            dbc.Col(
+                dbc.Input(type="number", id="edit-vendas", placeholder="Digite o número de Vendas", style={'font-size': '18px'}),  # ID alterado
+                width=10,
+            ),
+        ], className="mb-3"),
+        
+        # Botão de salvar
+        dbc.Button("Salvar", id="salvar-funil", color="primary", style={'font-size': '18px', 'width': '100%'}, className="mt-3")
+    ], style={'width': '600px', 'margin': 'auto', 'margin-top': '50px'}),
+    
+    # Feedback de Edição
+    html.Div(id='editar-funil-feedback', style={'text-align': 'center', 'margin-top': '10px'}),
+    
+    # Botões de navegação
+    botoes_navegacao(prev_href='/admin/page-5', next_href='/admin/page-7')
+], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif', 
+          'background-color': secondary_color, 'padding': '20px', 
+          'min-height': '100vh'})
 
 # Definir os layouts para todas as páginas administrativas (/admin/page-2 a /admin/page-9)
-admin_page_layouts = {}
-for i in range(2, 10):
-    if i == 3:
-        # Para a página 3, usar o layout específico de Gerenciar Melhores Anúncios
-        admin_page_layouts[f'/admin/page-{i}'] = admin_page_3_layout
-    else:
-        # Para as outras páginas, manter o layout de placeholder em desenvolvimento
-        admin_page_layouts[f'/admin/page-{i}'] = html.Div([
-            html.H1(f"Admin Página {i} - Em Desenvolvimento", className="text-center",
-                    style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
-            # Conteúdo placeholder
-            html.P("Conteúdo da página administrativa.", style={'font-size': '20px', 'text-align': 'center'}),
-            # Botões de navegação
-            botoes_navegacao(prev_href=f'/admin/page-{i-1}', next_href=f'/admin/page-{i+1}' if i < 9 else '/admin')
-        ], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif',
-                  'background-color': secondary_color, 'padding': '20px',
-                  'min-height': '100vh'})
+admin_page_layouts = {
+    '/admin/page-1': admin_page_1_layout,
+    '/admin/page-2': html.Div([
+        html.H1("Admin Página 2 - Em Desenvolvimento", className="text-center",
+                style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
+        html.P("Conteúdo da página administrativa.", style={'font-size': '20px', 'text-align': 'center'}),
+        botoes_navegacao(prev_href='/admin/page-1', next_href='/admin/page-3')
+    ], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif',
+              'background-color': secondary_color, 'padding': '20px',
+              'min-height': '100vh'}),
+    '/admin/page-3': admin_page_3_layout,
+    '/admin/page-4': admin_page_4_layout,  # Novo Layout Adicionado Aqui
+    '/admin/page-5': admin_page_5_layout,
+    '/admin/page-6': admin_page_6_layout,
+    '/admin/page-7': html.Div([
+        html.H1("Admin Página 7 - Em Desenvolvimento", className="text-center",
+                style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
+        html.P("Conteúdo da página administrativa.", style={'font-size': '20px', 'text-align': 'center'}),
+        botoes_navegacao(prev_href='/admin/page-6', next_href='/admin/page-8')
+    ], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif',
+              'background-color': secondary_color, 'padding': '20px',
+              'min-height': '100vh'}),
+    '/admin/page-8': html.Div([
+        html.H1("Admin Página 8 - Em Desenvolvimento", className="text-center",
+                style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
+        html.P("Conteúdo da página administrativa.", style={'font-size': '20px', 'text-align': 'center'}),
+        botoes_navegacao(prev_href='/admin/page-7', next_href='/admin/page-9')
+    ], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif',
+              'background-color': secondary_color, 'padding': '20px',
+              'min-height': '100vh'}),
+    '/admin/page-9': html.Div([
+        html.H1("Admin Página 9 - Em Desenvolvimento", className="text-center",
+                style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
+        html.P("Conteúdo da página administrativa.", style={'font-size': '20px', 'text-align': 'center'}),
+        botoes_navegacao(prev_href='/admin/page-8', next_href='/admin')
+    ], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif',
+              'background-color': secondary_color, 'padding': '20px',
+              'min-height': '100vh'}),
+}
     
 public_page_1_layout = html.Div([
     # Título da Página
@@ -1053,7 +1247,6 @@ def update_tabela_e_totais(mes_selecionado):
         # Obter os dados do Firebase para o mês especificado
         dados_mes = db.child("desempenho").child(mes_selecionado).get().val()
 
-        # Verificar se os dados foram carregados corretamente
         if not dados_mes:
             return [], "0", "0", "0", "0", f"⚠️ Dados não encontrados para o mês {mes_selecionado}."
 
@@ -1068,10 +1261,10 @@ def update_tabela_e_totais(mes_selecionado):
             'CPL (R$)': []
         }
 
-        # Preencher os valores para cada plataforma (Facebook Ads, Google Ads)
+        # Preencher os valores para cada plataforma
         total_impressao = 0
         total_cliques = 0
-        total_resultados = 0
+        total_resultado = 0
         total_orcamento = 0
 
         for plataforma, metrics in dados_mes.items():
@@ -1080,32 +1273,174 @@ def update_tabela_e_totais(mes_selecionado):
             cliques = float(metrics.get('Cliques_no_link', 0))
             resultados = float(metrics.get('Resultados', 0))
             orcamento = float(metrics.get('Orcamento', 0))
-            
-            data['Impressões'].append(impressoes)
-            data['Cliques no link'].append(cliques)
-            data['Resultados'].append(resultados)
-            data['Orçamento (R$)'].append(orcamento)
-            data['CTR (%)'].append(float(metrics.get('CTR', 0)))
-            data['CPL (R$)'].append(float(metrics.get('CPL', 0)))
+            ctr = float(metrics.get('CTR', 0))
+            cpl = float(metrics.get('CPL', 0))
+
+            data['Impressões'].append(formatar_valor(metrica='Impressões', valor=impressoes))
+            data['Cliques no link'].append(formatar_valor(metrica='Cliques no link', valor=cliques))
+            data['Resultados'].append(formatar_valor(metrica='Resultados', valor=resultados))
+            data['Orçamento (R$)'].append(formatar_valor(metrica='Orçamento (R$)', valor=orcamento))
+            data['CTR (%)'].append(formatar_valor(metrica='CTR (%)', valor=ctr))
+            data['CPL (R$)'].append(formatar_valor(metrica='CPL (R$)', valor=cpl))
 
             # Somar os totais para exibir nos quadros
             total_impressao += impressoes
             total_cliques += cliques
-            total_resultados += resultados
+            total_resultado += resultados
             total_orcamento += orcamento
 
-        # Criar DataFrame para a tabela
-        df = pd.DataFrame(data)
+        # Aqui, você pode converter `data` para o formato esperado pela tabela
+        # Supondo que `tabela-desempenho` espera uma lista de dicionários
+        tabela_dados = []
+        for i in range(len(data['Plataforma'])):
+            tabela_dados.append({
+                'Plataforma': data['Plataforma'][i],
+                'Impressões': data['Impressões'][i],
+                'Cliques no link': data['Cliques no link'][i],
+                'Resultados': data['Resultados'][i],
+                'Orçamento (R$)': data['Orçamento (R$)'][i],
+                'CTR (%)': data['CTR (%)'][i],
+                'CPL (R$)': data['CPL (R$)'][i]
+            })
 
-        # Verificar se o DataFrame está vazio
-        if df.empty:
-            return [], "0", "0", "0", "0", f"⚠️ Sem dados disponíveis para o mês {mes_selecionado}."
-
-        return df.to_dict('records'), f"{total_impressao:,.0f}", f"{total_cliques:,.0f}", f"{total_resultados:,.0f}", f"R$ {total_orcamento:,.2f}", ""
+        return (
+            tabela_dados, 
+            f"{total_impressao:,.0f}".replace(",", "."), 
+            f"{total_cliques:,.0f}".replace(",", "."), 
+            f"{total_resultado:,.0f}".replace(",", "."), 
+            f"R$ {total_orcamento:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), 
+            ""
+        )
     except Exception as e:
+        logging.error(f"Erro ao carregar dados do Firebase: {e}")
         return [], "0", "0", "0", "0", f"⚠️ Erro ao carregar os dados: {str(e)}"
+        
+@app.callback(
+    [Output('editar-produto-feedback', 'children')],
+    [Input('salvar-produto', 'n_clicks')],
+    [State('edit-produto', 'value'),
+     State('edit-mes-produto', 'value'),
+     State('edit-valor-investido', 'value'),
+     State('edit-retorno', 'value')]
+)
+def salvar_dados_produto(n_clicks, produto, mes, valor_investido, retorno):
+    if n_clicks and n_clicks > 0:
+        if not all([produto, mes, valor_investido, retorno]):
+            return [dbc.Alert("Por favor, preencha todos os campos.", color="danger")]
+        try:
+            dados_corrigidos = validar_chaves_e_valores({
+                'Valor Investido (R$)': valor_investido,
+                'Retorno (R$)': retorno
+            })
+            db.child("produtos").child(produto).child(mes).update(dados_corrigidos)
+            feedback = dbc.Alert("Dados salvos com sucesso!", color="success")
+            return [feedback]
+        except Exception as e:
+            feedback = dbc.Alert(f"Erro ao salvar os dados: {str(e)}", color="danger")
+            return [feedback]
+    return [dash.no_update]
+@app.callback(
+    [Output('editar-funil-feedback', 'children'),
+     Output('edit-leads-frios', 'value'),
+     Output('edit-atendidos', 'value'),
+     Output('edit-vendas', 'value')],  # Alterado de 'edit-conversoes' para 'edit-vendas'
+    [Input('salvar-funil', 'n_clicks'),
+     Input('edit-mes-funil', 'value')],
+    [State('edit-leads-frios', 'value'),
+     State('edit-atendidos', 'value'),
+     State('edit-vendas', 'value')]  # Alterado de 'edit-conversoes' para 'edit-vendas'
+)
+def salvar_ou_carregar_funil(n_clicks, mes, leads_frios, atendidos, vendas):
+    ctx = dash.callback_context
+    trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
 
+    if trigger_id == 'edit-mes-funil' and mes:
+        try:
+            dados_mes = db.child("funil_vendas").child(mes).get().val()
+            if dados_mes:
+                leads_frios = dados_mes.get('Leads Frios', 0)
+                atendidos = dados_mes.get('Atendidos', 0)
+                vendas = dados_mes.get('Vendas', 0)  # Alterado de 'Conversões' para 'Vendas'
+                return [dbc.Alert(f"Dados carregados para {mes}.", color="info")], leads_frios, atendidos, vendas
+            else:
+                return [dbc.Alert(f"Nenhum dado encontrado para {mes}.", color="warning")], None, None, None
+        except Exception as e:
+            return [dbc.Alert(f"Erro ao carregar dados: {str(e)}", color="danger")], None, None, None
+
+    elif trigger_id == 'salvar-funil' and n_clicks > 0:
+        try:
+            if leads_frios is None or atendidos is None or vendas is None:
+                return [dbc.Alert("Por favor, preencha todos os campos.", color="danger")], leads_frios, atendidos, vendas
+
+            db.child("funil_vendas").child(mes).update({
+                'Leads Frios': int(leads_frios),
+                'Atendidos': int(atendidos),
+                'Vendas': int(vendas)  # Alterado de 'Conversões' para 'Vendas'
+            })
+            return [dbc.Alert("Dados salvos com sucesso!", color="success")], leads_frios, atendidos, vendas
+        except Exception as e:
+            return [dbc.Alert(f"Erro ao salvar os dados: {str(e)}", color="danger")], leads_frios, atendidos, vendas
+
+    return dash.no_update, leads_frios, atendidos, vendas
     
+def load_produtos_data():
+    dados_produtos = {
+        'Mês': [],
+        'Produto': [],
+        'Valor Investido (R$)': [],
+        'Retorno (R$)': []
+    }
+    
+    try:
+        produtos_data = db.child("produtos").get().val()
+        logging.info(f"Dados carregados de 'produtos': {produtos_data}")
+        
+        if produtos_data:
+            for produto, meses_data in produtos_data.items():
+                for mes in meses_completos:
+                    dados_produtos['Mês'].append(mes)
+                    dados_produtos['Produto'].append(produto)
+                    mes_data = meses_data.get(mes, {})
+                    valor_investido = mes_data.get('Valor_Investido_R', 0)  # Chaves corrigidas
+                    retorno = mes_data.get('Retorno_R', 0)  # Chaves corrigidas
+                    dados_produtos['Valor Investido (R$)'].append(valor_investido)
+                    dados_produtos['Retorno (R$)'].append(retorno)
+        else:
+            logging.warning("Nenhum dado encontrado para 'produtos' no Firebase.")
+    except Exception as e:
+        logging.error(f"Erro ao carregar dados de produtos do Firebase: {e}")
+    
+    df_produtos = pd.DataFrame(dados_produtos)
+    logging.info(f"DataFrame de produtos:\n{df_produtos}")
+    return dados_produtos
+
+# Carregar os dados dos produtos
+dados_produtos = load_produtos_data()
+df_produtos = pd.DataFrame(dados_produtos)
+def load_funil_data():
+    df_funil = pd.DataFrame(columns=['Mês', 'Leads Frios', 'Atendidos', 'Vendas'])  # Alterado de 'Conversões' para 'Vendas'
+    try:
+        funil_data = db.child("funil_vendas").get().val()
+        if funil_data:
+            for mes in meses_completos:
+                mes_data = funil_data.get(mes, {})
+                leads_frios = mes_data.get('Leads Frios', 0)
+                atendidos = mes_data.get('Atendidos', 0)
+                vendas = mes_data.get('Vendas', 0)  # Alterado de 'Conversões' para 'Vendas'
+                df_funil = pd.concat([df_funil, pd.DataFrame([{
+    'Mês': mes,
+    'Leads Frios': leads_frios,
+    'Atendidos': atendidos,
+    'Vendas': vendas
+}])], ignore_index=True)
+        else:
+            print("Nenhum dado encontrado para 'funil_vendas' no Firebase.")
+    except Exception as e:
+        print(f"Erro ao carregar dados de funil_vendas do Firebase: {e}")
+    return df_funil
+
+# Carregar os dados do funil de vendas
+df_funil = load_funil_data()
 
 # Página 3: Comparação de Todos os Meses (/page-2)
 public_page_2_layout = html.Div([
@@ -1467,7 +1802,39 @@ public_page_8_layout = html.Div([
 ], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif', 
           'background-color': secondary_color, 'padding': '20px', 
           'min-height': '100vh'})
-
+@app.callback(
+    Output('editar-cliques-feedback', 'children'),
+    [Input('salvar-cliques-estado', 'n_clicks')],
+    [State('edit-mes-cliques', 'value'),
+     State('tabela-cliques-estado', 'data')]
+)
+def salvar_cliques_estado(n_clicks, mes, dados_cliques):
+    if n_clicks and n_clicks > 0:
+        if not mes:
+            return dbc.Alert("Por favor, selecione um mês.", color="danger")
+        
+        # Filtrar apenas linhas com estado preenchido
+        dados_filtrados = [d for d in dados_cliques if d['estado'].strip() != '']
+        
+        if not dados_filtrados:
+            return dbc.Alert("Por favor, preencha pelo menos um estado.", color="danger")
+        
+        try:
+            # Estrutura para salvar no Firebase
+            cliques_data = {d['estado']: int(d['cliques']) for d in dados_filtrados}
+            
+            # Limitar a 10 estados
+            if len(cliques_data) > 10:
+                return dbc.Alert("Limite de 10 estados atingido. Por favor, remova alguns.", color="danger")
+            
+            # Salvar os dados no Firebase sob "cliques_por_estado/{mes}"
+            db.child("cliques_por_estado").child(mes).set(cliques_data)
+            
+            return dbc.Alert("Dados salvos com sucesso!", color="success")
+        except Exception as e:
+            return dbc.Alert(f"Erro ao salvar os dados: {str(e)}", color="danger")
+    
+    return ""
 # Função para gerar os botões de navegação fixos
 # Layout do Modo Visualizador para Exibir os Melhores Anúncios
 visualizador_layout = html.Div([
@@ -1685,22 +2052,18 @@ import logging
 # Configuração de logging para identificar erros e processos durante a execução
 logging.basicConfig(level=logging.INFO)
 def validar_chaves_e_valores(dados):
-    """
-    Verifica as chaves e valores de um dicionário para garantir que estão em um formato válido para o Firebase.
-    Remove caracteres especiais e ajusta os tipos de valores.
-    """
     dados_corrigidos = {}
     for chave, valor in dados.items():
-        # Substituir caracteres inválidos e espaços nos nomes das chaves
-        chave_corrigida = chave.replace(" ", "_").replace("(", "").replace(")", "")
+        # Remover caracteres inválidos
+        chave_corrigida = chave.replace(" ", "_").replace("(", "").replace(")", "").replace("$", "")
         
-        # Verificar e corrigir valores para garantir que são do tipo correto
+        # Validar tipos de valores
         if isinstance(valor, (float, int)) and pd.notna(valor):
             dados_corrigidos[chave_corrigida] = float(valor)
-        elif isinstance(valor, str):
-            dados_corrigidos[chave_corrigida] = valor
+        elif isinstance(valor, str) and valor.strip() != "":
+            dados_corrigidos[chave_corrigida] = valor.strip()
         else:
-            # Se o valor não é válido, definimos como 0.0 ou um valor padrão
+            # Definir um valor padrão ou omitir a chave
             dados_corrigidos[chave_corrigida] = 0.0
 
     return dados_corrigidos
@@ -1982,7 +2345,8 @@ def update_cliques_pais(mes_selecionado):
     # Criar o gráfico de cliques por estado
     fig = criar_grafico_cliques_estado(mes_selecionado)
     
-    # Comentários personalizados para cada mês
+    # Comentários personalizados para cada mês (opcional)
+    # Você pode personalizar os comentários conforme os dados ou eventos específicos
     if mes_selecionado == 'Agosto':
         comentario_text = "Em agosto, a participação em feiras nos estados do PR e RS aumentaram significativamente os cliques provenientes dessas regiões."
     elif mes_selecionado == 'Setembro':
@@ -2004,10 +2368,12 @@ def update_cliques_pais(mes_selecionado):
     [Input('produto-select-dropdown', 'value')]
 )
 def atualizar_tabela_produtos(produto_selecionado):
+    logging.info(f"Produto selecionado: {produto_selecionado}")
     df_produto = df_produtos[df_produtos['Produto'] == produto_selecionado].copy()
+    logging.info(f"Dados filtrados para {produto_selecionado}:\n{df_produto}")
     df_produto_formatado = formatar_valores(df_produto)
-    return gerar_tabela(df_produto_formatado)
-
+    tabela = gerar_tabela(df_produto_formatado)
+    return tabela
 @app.callback(
     Output('grafico-media-totais', 'figure'),
     [Input('seletor-metrica-media', 'value')]
@@ -2138,7 +2504,7 @@ def update_funil(mes_selecionado):
     # Filtrar os dados para o mês selecionado
     df_mes = df_funil[df_funil['Mês'] == mes_selecionado]
     
-    if df_mes.empty or (df_mes[['Leads Frios', 'Atendidos', 'Conversões']].sum(axis=1).values[0] == 0):
+    if df_mes.empty or (df_mes[['Leads Frios', 'Atendidos', 'Vendas']].sum(axis=1).values[0] == 0):
         fig = px.bar(title=f"Funil de Vendas - {mes_selecionado} (Sem dados)")
         fig.update_layout(
             plot_bgcolor=secondary_color,
@@ -2150,12 +2516,12 @@ def update_funil(mes_selecionado):
     else:
         # Criar o gráfico de funil (barra horizontal) ordenado do maior para o menor
         df_funil_plot = df_mes.melt(id_vars=['Mês'], var_name='Etapa', value_name='Quantidade')
-        etapas_order = ['Leads Frios', 'Atendidos', 'Conversões']
+        etapas_order = ['Leads Frios', 'Atendidos', 'Vendas']  # Alterado de 'Conversões' para 'Vendas'
         df_funil_plot['Etapa'] = pd.Categorical(df_funil_plot['Etapa'], categories=etapas_order, ordered=True)
         df_funil_plot = df_funil_plot.sort_values('Etapa')
         
         # Definir cores para cada etapa
-        cores = {'Leads Frios': '#FFA07A', 'Atendidos': '#20B2AA', 'Conversões': '#3CB371'}
+        cores = {'Leads Frios': '#FFA07A', 'Atendidos': '#20B2AA', 'Vendas': '#3CB371'}  # Alterado
         
         fig = px.bar(
             df_funil_plot,
@@ -2178,13 +2544,24 @@ def update_funil(mes_selecionado):
         
         fig.update_traces(textposition='auto')  # Ajusta a posição do texto
         
-        # Calcular a Taxa de Conversão
+        # Calcular as Taxas de Cada Etapa
         leads_frios = df_mes['Leads Frios'].values[0]
         atendidos = df_mes['Atendidos'].values[0]
-        conversoes = df_mes['Conversões'].values[0]
+        vendas = df_mes['Vendas'].values[0]
         
-        taxa_conversao = (conversoes / atendidos) * 100 if atendidos > 0 else 0.0
-        taxa_conversao_text = f"Taxa de Conversão: {taxa_conversao:.2f}%"
+        taxa_atendimento = (atendidos / leads_frios) * 100 if leads_frios > 0 else 0.0
+        taxa_conversao = (vendas / atendidos) * 100 if atendidos > 0 else 0.0
+        
+        taxa_conversao_text = f"""
+        Taxa de Atendimento: {taxa_atendimento:.2f}% dos Leads Frios foram Atendidos.<br>
+        Taxa de Conversão: {taxa_conversao:.2f}% dos Atendidos foram Convertidos em Vendas.
+        """
+        
+        # Estilizar as taxas usando HTML
+        taxa_conversao_text = html.Div([
+            html.P(f"Taxa de Atendimento: {taxa_atendimento:.2f}%", style={'font-size': '20px'}),
+            html.P(f"Taxa de Conversão: {taxa_conversao:.2f}%", style={'font-size': '20px'})
+        ], style={'font-weight': 'bold'})
     
     return fig, taxa_conversao_text
 
