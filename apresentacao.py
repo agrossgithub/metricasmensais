@@ -337,13 +337,6 @@ dados_produtos = {
 df_produtos = pd.DataFrame(dados_produtos)
 
 # Calcular ROI por produto, com tratamento para valores investidos iguais a 0
-df_produtos['ROI (%)'] = df_produtos.apply(
-    lambda row: ((row['Retorno (R$)'] - row['Valor Investido (R$)']) / row['Valor Investido (R$)']) * 100 
-    if row['Valor Investido (R$)'] > 0 else 0.0,
-    axis=1
-)
-
-# Função para formatar valores monetários e porcentagens para as tabelas
 def formatar_valores(df):
     # Formatar colunas de valores numéricos para moeda
     df_formatado = df.copy()
@@ -356,12 +349,15 @@ def formatar_valores(df):
     # Formatar ROI
     if 'ROI (%)' in df_formatado.columns:
         df_formatado['ROI (%)'] = df_formatado['ROI (%)'].apply(
-            lambda x: f"{x:.2f}%"
+            lambda x: f"{x:.2f}%" if isinstance(x, (int, float)) else x
         )
     return df_formatado
 
 # Aplicando a formatação de valores monetários
 df_produtos_formatado = formatar_valores(df_produtos)
+
+# Log para verificar a formatação
+logging.info(f"DataFrame após formatar valores:\n{df_produtos_formatado.head()}")
 
 
 
@@ -1423,8 +1419,16 @@ def load_produtos_data():
     
     df_produtos = pd.DataFrame(dados_produtos)
     logging.info(f"DataFrame de produtos:\n{df_produtos}")
-    return dados_produtos
-
+    
+    # Calcular o ROI (%) para cada produto
+    df_produtos['ROI (%)'] = df_produtos.apply(
+        lambda row: ((row['Retorno (R$)'] - row['Valor Investido (R$)']) / row['Valor Investido (R$)']) * 100 
+        if row['Valor Investido (R$)'] > 0 else 0.0,
+        axis=1
+    )
+    logging.info(f"DataFrame após calcular ROI:\n{df_produtos}")
+    
+    return df_produtos
 # Carregar os dados dos produtos
 dados_produtos = load_produtos_data()
 df_produtos = pd.DataFrame(dados_produtos)
