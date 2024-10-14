@@ -1983,14 +1983,13 @@ public_page_12_layout = html.Div([
 })
 @app.callback(
     Output('vendas-pagina-6', 'children'),  # Componente que exibirá as vendas
-    [Input('seletor-mes-funil', 'value')]    # Alinhado com o ID do Dropdown no layout
+    [Input('mes-pagina-6-dropdown', 'value')]  # Dropdown para selecionar o mês
 )
 def atualizar_vendas_pagina_6(mes_selecionado):
     try:
-        logging.info(f"Selecionado Mês: {mes_selecionado}")
+        
         # Recupera os dados do Firebase para o mês selecionado
         dados_mes = db.child("funil_vendas").child(mes_selecionado).get().val()
-        logging.info(f"Dados Recuperados: {dados_mes}")
         
         # Verifica se os dados existem e se a chave 'Vendas' está presente
         if dados_mes and 'Vendas' in dados_mes:
