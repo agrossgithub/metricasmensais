@@ -1357,6 +1357,7 @@ def salvar_dados_produto(n_clicks, produto, mes, valor_investido, retorno):
      State('edit-atendidos', 'value'),
      State('edit-vendas', 'value')]  # Alterado de 'edit-conversoes' para 'edit-vendas'
 )
+
 def salvar_ou_carregar_funil(n_clicks, mes, leads_frios, atendidos, vendas):
     ctx = dash.callback_context
     trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
@@ -1456,7 +1457,22 @@ def load_funil_data():
 
 # Carregar os dados do funil de vendas
 df_funil = load_funil_data()
-
+pagina_navegacao = {
+    '/': {'prev': '/page-13', 'next': '/page-1'},
+    '/page-1': {'prev': '/', 'next': '/page-2'},
+    '/page-2': {'prev': '/page-1', 'next': '/page-3'},
+    '/page-3': {'prev': '/page-2', 'next': '/page-4'},
+    '/page-4': {'prev': '/page-3', 'next': '/page-5'},
+    '/page-5': {'prev': '/page-4', 'next': '/page-6'},
+    '/page-6': {'prev': '/page-5', 'next': '/page-7'},
+    '/page-7': {'prev': '/page-6', 'next': '/page-8'},
+    '/page-8': {'prev': '/page-7', 'next': '/page-9'},  # Página 8 agora aponta para Página 9
+    '/page-9': {'prev': '/page-8', 'next': '/page-10'},
+    '/page-10': {'prev': '/page-9', 'next': '/page-11'},
+    '/page-11': {'prev': '/page-10', 'next': '/page-12'},
+    '/page-12': {'prev': '/page-11', 'next': '/'},  # Página 12 retorna para a Página Inicial
+    # Adicione outras páginas públicas se necessário
+}
 # Página 3: Comparação de Todos os Meses (/page-2)
 public_page_2_layout = html.Div([
     html.H1("Comparação de Todos os Meses", className="text-center", 
@@ -1812,7 +1828,7 @@ public_page_8_layout = html.Div([
     ], id='grafico-comparacao-container', style={'margin-bottom': '20px'}),
     
     # Botões de Navegação
-    botoes_navegacao(prev_href='/page-7', next_href='/')
+     botoes_navegacao(prev_href='/page-7', next_href='/page-9')
 ], style={
     'color': '#343a40', 
     'font-family': 'Montserrat, sans-serif', 
@@ -1820,6 +1836,197 @@ public_page_8_layout = html.Div([
     'padding': '20px', 
     'min-height': '100vh'
 })
+public_page_9_layout = html.Div([
+    html.H1("Comercial 1", className="text-center",
+            style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
+    
+    # Seletor de Meses
+    html.Div([
+        html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
+        dcc.Dropdown(
+            id='mes-pagina-9-dropdown',
+            options=[{'label': mes, 'value': mes} for mes in meses_completos],
+            value='Setembro',  # Valor padrão
+            clearable=False,
+            style={'width': '50%', 'margin': 'auto'}
+        )
+    ], style={'text-align': 'center', 'margin-top': '20px'}),
+    
+    # Área para exibir a imagem
+    html.Div([
+        html.Img(
+            id='imagem-pagina-9',
+            src="",
+            alt="Imagem Comercial - Setembro",
+            style={
+                'max-width': '100%',  # Garante que a imagem ocupe toda a largura disponível
+                'height': 'auto',
+                'display': 'block',
+                'margin': 'auto',
+                'padding': '10px',
+                'border-radius': '10px'
+            }
+        )
+    ], style={'text-align': 'center', 'margin-top': '30px'}),
+    
+    # Feedback
+    html.Div(id='feedback-pagina-9', style={'text-align': 'center', 'margin-top': '10px'}),
+    
+    # Botões de navegação
+    botoes_navegacao(prev_href='/page-8', next_href='/page-10')  # Configurado para ir para Página 10
+], style={
+    'color': '#343a40', 
+    'font-family': 'Montserrat, sans-serif', 
+    'background-color': secondary_color, 
+    'padding': '20px', 
+    'min-height': '100vh'
+})
+public_page_10_layout = html.Div([
+    html.H1("Comercial", className="text-center",
+            style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
+    
+    # Seletor de Meses
+    html.Div([
+        html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
+        dcc.Dropdown(
+            id='mes-pagina-10-dropdown',
+            options=[{'label': mes, 'value': mes} for mes in meses_completos],
+            value='Setembro',  # Valor padrão
+            clearable=False,
+            style={'width': '50%', 'margin': 'auto'}
+        )
+    ], style={'text-align': 'center', 'margin-top': '20px'}),
+    
+    # Área para exibir a imagem
+    html.Div([
+        html.Img(id='imagem-pagina-10', src="", style={'max-width': '100%', 'height': 'auto', 'display': 'block', 'margin': 'auto'})
+    ], style={'text-align': 'center', 'margin-top': '30px'}),
+    
+    # Feedback
+    html.Div(id='feedback-pagina-10', style={'text-align': 'center', 'margin-top': '10px'}),
+    
+    # Botões de navegação
+    botoes_navegacao(prev_href='/page-9', next_href='/page-11')  # Configurado para ir para Página 11
+], style={
+    'color': '#343a40', 
+    'font-family': 'Montserrat, sans-serif', 
+    'background-color': secondary_color, 
+    'padding': '20px', 
+    'min-height': '100vh'
+})
+public_page_11_layout = html.Div([
+    html.H1("Comercial", className="text-center",
+            style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
+    
+    # Seletor de Meses
+    html.Div([
+        html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
+        dcc.Dropdown(
+            id='mes-pagina-11-dropdown',
+            options=[{'label': mes, 'value': mes} for mes in meses_completos],
+            value='Setembro',  # Valor padrão
+            clearable=False,
+            style={'width': '50%', 'margin': 'auto'}
+        )
+    ], style={'text-align': 'center', 'margin-top': '20px'}),
+    
+    # Área para exibir a imagem
+    html.Div([
+        html.Img(id='imagem-pagina-11', src="", style={'max-width': '100%', 'height': 'auto', 'display': 'block', 'margin': 'auto'})
+    ], style={'text-align': 'center', 'margin-top': '30px'}),
+    
+    # Feedback
+    html.Div(id='feedback-pagina-11', style={'text-align': 'center', 'margin-top': '10px'}),
+    
+    # Botões de navegação
+    botoes_navegacao(prev_href='/page-10', next_href='/page-12')  # Configurado para ir para Página 12
+], style={
+    'color': '#343a40', 
+    'font-family': 'Montserrat, sans-serif', 
+    'background-color': secondary_color, 
+    'padding': '20px', 
+    'min-height': '100vh'
+})
+
+public_page_12_layout = html.Div([
+    html.H1("Comercial", className="text-center",
+            style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
+    
+    # Seletor de Meses
+    html.Div([
+        html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
+        dcc.Dropdown(
+            id='mes-pagina-12-dropdown',
+            options=[{'label': mes, 'value': mes} for mes in meses_completos],
+            value='Setembro',  # Valor padrão
+            clearable=False,
+            style={'width': '50%', 'margin': 'auto'}
+        )
+    ], style={'text-align': 'center', 'margin-top': '20px'}),
+    
+    # Área para exibir a imagem
+    html.Div([
+        html.Img(id='imagem-pagina-12', src="", style={'max-width': '100%', 'height': 'auto', 'display': 'block', 'margin': 'auto'})
+    ], style={'text-align': 'center', 'margin-top': '30px'}),
+    
+    # Feedback
+    html.Div(id='feedback-pagina-12', style={'text-align': 'center', 'margin-top': '10px'}),
+    
+    # Botões de navegação
+    botoes_navegacao(prev_href='/page-11', next_href='/')  # Configurado para voltar à Página Inicial
+], style={
+    'color': '#343a40', 
+    'font-family': 'Montserrat, sans-serif', 
+    'background-color': secondary_color, 
+    'padding': '20px', 
+    'min-height': '100vh'
+})
+@app.callback(
+    [Output('imagem-pagina-9', 'src'),
+     Output('feedback-pagina-9', 'children')],
+    [Input('mes-pagina-9-dropdown', 'value')]
+)
+def atualizar_imagem_pagina_9(mes_selecionado):
+    if mes_selecionado == 'Setembro':
+        imagem_link = "https://i.ibb.co/7gJHvNy/45.png"
+        return imagem_link, ""
+    else:
+        return "", "Imagem não disponível para o mês selecionado."
+@app.callback(
+    [Output('imagem-pagina-10', 'src'),
+     Output('feedback-pagina-10', 'children')],
+    [Input('mes-pagina-10-dropdown', 'value')]
+)
+def atualizar_imagem_pagina_10(mes_selecionado):
+    if mes_selecionado == 'Setembro':
+        imagem_link = "https://i.ibb.co/pWQf9Bx/46.png"
+        return imagem_link, ""
+    else:
+        return "", "Imagem não disponível para o mês selecionado."
+@app.callback(
+    [Output('imagem-pagina-11', 'src'),
+     Output('feedback-pagina-11', 'children')],
+    [Input('mes-pagina-11-dropdown', 'value')]
+)
+def atualizar_imagem_pagina_11(mes_selecionado):
+    if mes_selecionado == 'Setembro':
+        imagem_link = "https://i.ibb.co/QdCwwNL/47.png"
+        return imagem_link, ""
+    else:
+        return "", "Imagem não disponível para o mês selecionado."
+@app.callback(
+    [Output('imagem-pagina-12', 'src'),
+     Output('feedback-pagina-12', 'children')],
+    [Input('mes-pagina-12-dropdown', 'value')]
+)
+def atualizar_imagem_pagina_12(mes_selecionado):
+    if mes_selecionado == 'Setembro':
+        imagem_link = "https://i.ibb.co/b6QWtPN/48.png"
+        return imagem_link, ""
+    else:
+        return "", "Imagem não disponível para o mês selecionado."
+
+
 @app.callback(
     Output('grafico-comparacao-container', 'children'),
     [Input('seletor-metricas-comparacao', 'value')]
@@ -2257,7 +2464,11 @@ def display_page(pathname, auth_state):
         '/page-6': public_page_6_layout,
         '/page-7': public_page_7_layout,
         '/page-8': public_page_8_layout,
-        '/visualizador': visualizador_layout  # Adicione o modo visualizador aqui
+        '/page-9': public_page_9_layout,       # Nova página 9
+        '/page-10': public_page_10_layout,     # Nova página 10
+        '/page-11': public_page_11_layout,     # Nova página 11
+        '/page-12': public_page_12_layout,     # Nova página 12
+        '/visualizador': visualizador_layout
     }
 
     # Definição das páginas administrativas
