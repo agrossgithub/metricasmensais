@@ -649,7 +649,7 @@ dados_funil['Conversões'][meses_completos.index('Agosto')] = 61
 
 dados_funil['Leads Frios'][meses_completos.index('Setembro')] = 943
 dados_funil['Atendidos'][meses_completos.index('Setembro')] = 622
-dados_funil['Conversões'][meses_completos.index('Setembro')] = 36
+dados_funil['Conversões'][meses_completos.index('Setembro')] = 0
 
 df_funil = pd.DataFrame(dados_funil)
 
@@ -1981,6 +1981,34 @@ public_page_12_layout = html.Div([
     'padding': '20px', 
     'min-height': '100vh'
 })
+@app.callback(
+    Output('vendas-pagina-6', 'children'),  # Componente que exibirá as vendas
+    [Input('seletor-mes-funil', 'value')]    # Alinhado com o ID do Dropdown no layout
+)
+def atualizar_vendas_pagina_6(mes_selecionado):
+    try:
+        logging.info(f"Selecionado Mês: {mes_selecionado}")
+        # Recupera os dados do Firebase para o mês selecionado
+        dados_mes = db.child("funil_vendas").child(mes_selecionado).get().val()
+        logging.info(f"Dados Recuperados: {dados_mes}")
+        
+        # Verifica se os dados existem e se a chave 'Vendas' está presente
+        if dados_mes and 'Vendas' in dados_mes:
+            vendas = dados_mes['Vendas']
+            return f"Total de Vendas em {mes_selecionado}: {vendas}"
+        else:
+            return dbc.Alert(
+                f"Nenhum dado de vendas encontrado para {mes_selecionado}.",
+                color="warning",
+                dismissable=True
+            )
+    except Exception as e:
+        logging.error(f"Erro ao recuperar Vendas para {mes_selecionado}: {e}")
+        return dbc.Alert(
+            "Erro ao recuperar os dados de vendas.",
+            color="danger",
+            dismissable=True
+        )
 @app.callback(
     [Output('imagem-pagina-9', 'src'),
      Output('feedback-pagina-9', 'children')],
