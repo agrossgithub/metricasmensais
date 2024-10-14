@@ -649,7 +649,7 @@ dados_funil['Conversões'][meses_completos.index('Agosto')] = 61
 
 dados_funil['Leads Frios'][meses_completos.index('Setembro')] = 943
 dados_funil['Atendidos'][meses_completos.index('Setembro')] = 622
-dados_funil['Conversões'][meses_completos.index('Setembro')] = 0
+dados_funil['Conversões'][meses_completos.index('Setembro')] = 36
 
 df_funil = pd.DataFrame(dados_funil)
 
