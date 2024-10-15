@@ -1853,20 +1853,20 @@ public_page_9_layout = html.Div([
     ], style={'text-align': 'center', 'margin-top': '20px'}),
     
     # Área para exibir a imagem
-    html.Div([
-        html.Img(
-            id='imagem-pagina-9',
-            src="",
-            alt="Imagem Comercial - Setembro",
-            style={
-                'max-width': '100%',  # Garante que a imagem ocupe toda a largura disponível
-                'height': 'auto',
-                'display': 'block',
-                'margin': 'auto',
-                'padding': '10px',
-                'border-radius': '10px'
-            }
-        )
+   html.Div([
+    html.Img(
+        id='imagem-pagina-9',
+        src="",
+        alt="Imagem Comercial - Setembro",
+        style={
+            'width': '56vw',  # 80% da largura da tela (viewport)
+            'height': 'auto',  # Mantém a proporção correta
+            'display': 'block',
+            'margin': 'auto',
+            'padding': '10px',
+            'border-radius': '10px'
+        }
+    )
     ], style={'text-align': 'center', 'margin-top': '30px'}),
     
     # Feedback
@@ -1899,14 +1899,22 @@ public_page_10_layout = html.Div([
     
     # Área para exibir a imagem
     html.Div([
-        html.Img(id='imagem-pagina-10', src="", style={'max-width': '100%', 'height': 'auto', 'display': 'block', 'margin': 'auto'})
+        html.Img(id='imagem-pagina-10', src="", 
+                 style={
+                     'width': '56vw',  # Largura ajustada para 56% da viewport
+                     'height': 'auto',  # Mantém a proporção da imagem
+                     'display': 'block',
+                     'margin': 'auto',
+                     'padding': '10px',
+                     'border-radius': '10px'
+                 })
     ], style={'text-align': 'center', 'margin-top': '30px'}),
     
     # Feedback
     html.Div(id='feedback-pagina-10', style={'text-align': 'center', 'margin-top': '10px'}),
     
     # Botões de navegação
-    botoes_navegacao(prev_href='/page-9', next_href='/page-11')  # Configurado para ir para Página 11
+    botoes_navegacao(prev_href='/page-9', next_href='/page-11')
 ], style={
     'color': '#343a40', 
     'font-family': 'Montserrat, sans-serif', 
@@ -1914,6 +1922,7 @@ public_page_10_layout = html.Div([
     'padding': '20px', 
     'min-height': '100vh'
 })
+
 public_page_11_layout = html.Div([
     html.H1("Comercial", className="text-center",
             style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
@@ -1932,14 +1941,22 @@ public_page_11_layout = html.Div([
     
     # Área para exibir a imagem
     html.Div([
-        html.Img(id='imagem-pagina-11', src="", style={'max-width': '100%', 'height': 'auto', 'display': 'block', 'margin': 'auto'})
+        html.Img(id='imagem-pagina-11', src="", 
+                 style={
+                     'width': '56vw',  # Largura ajustada para 56% da viewport
+                     'height': 'auto',  # Mantém a proporção da imagem
+                     'display': 'block',
+                     'margin': 'auto',
+                     'padding': '10px',
+                     'border-radius': '10px'
+                 })
     ], style={'text-align': 'center', 'margin-top': '30px'}),
     
     # Feedback
     html.Div(id='feedback-pagina-11', style={'text-align': 'center', 'margin-top': '10px'}),
     
     # Botões de navegação
-    botoes_navegacao(prev_href='/page-10', next_href='/page-12')  # Configurado para ir para Página 12
+    botoes_navegacao(prev_href='/page-10', next_href='/page-12')
 ], style={
     'color': '#343a40', 
     'font-family': 'Montserrat, sans-serif', 
@@ -1966,14 +1983,22 @@ public_page_12_layout = html.Div([
     
     # Área para exibir a imagem
     html.Div([
-        html.Img(id='imagem-pagina-12', src="", style={'max-width': '100%', 'height': 'auto', 'display': 'block', 'margin': 'auto'})
+        html.Img(id='imagem-pagina-12', src="", 
+                 style={
+                     'width': '56vw',  # Largura ajustada para 56% da viewport
+                     'height': 'auto',  # Mantém a proporção da imagem
+                     'display': 'block',
+                     'margin': 'auto',
+                     'padding': '10px',
+                     'border-radius': '10px'
+                 })
     ], style={'text-align': 'center', 'margin-top': '30px'}),
     
     # Feedback
     html.Div(id='feedback-pagina-12', style={'text-align': 'center', 'margin-top': '10px'}),
     
     # Botões de navegação
-    botoes_navegacao(prev_href='/page-11', next_href='/')  # Configurado para voltar à Página Inicial
+    botoes_navegacao(prev_href='/page-11', next_href='/')
 ], style={
     'color': '#343a40', 
     'font-family': 'Montserrat, sans-serif', 
