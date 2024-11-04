@@ -1,18 +1,48 @@
 import dash
-from dash import dcc, html, Input, Output, State
+from dash import Dash, html, dcc, Input, Output, State, dash_table
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
-import pyrebase
-from dash import dash_table
+import plotly.graph_objects as go  # Adicionado
+from sklearn.linear_model import LinearRegression
+import numpy as np
 import logging
+import pyrebase  # Adicionado
+from dash import callback_context
 
 logging.basicConfig(level=logging.INFO)
 
+anos_disponiveis = [2021, 2022, 2023, 2024, 2025]
 ordem_meses = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ]
+def criar_seletores(label_ano, label_mes, id_ano, id_mes):
+    return html.Div([
+        dbc.Row([
+            dbc.Col([
+                html.Label(label_ano, style={'font-weight': '700', 'font-size': '16px'}),
+                dcc.Dropdown(
+                    id=id_ano,
+                    options=[{'label': ano, 'value': ano} for ano in anos_disponiveis],
+                    value=2024,  # Valor padrão
+                    clearable=False,
+                    style={'width': '100%'}
+                )
+            ], md=6),
+            dbc.Col([
+                html.Label(label_mes, style={'font-weight': '700', 'font-size': '16px'}),
+                dcc.Dropdown(
+                    id=id_mes,
+                    options=[{'label': mes, 'value': mes} for mes in meses_completos],
+                    value='Agosto',  # Valor padrão
+                    clearable=False,
+                    style={'width': '100%'}
+                )
+            ], md=6),
+        ], justify='center', style={'margin-top': '10px'})
+    ])
+
 def botoes_navegacao(prev_href, next_href):
     return html.Div([
         dbc.Button(
@@ -222,22 +252,32 @@ df_desempenho = pd.DataFrame(dados_desempenho)
 @app.callback(
     [Output('tabela-melhores-anuncios', 'children'),
      Output('imagem-preview-public', 'src')],
-    Input('mes-melhores-anuncios-dropdown', 'value')
+    [Input('melhores-anuncios-ano-dropdown', 'value'),
+     Input('mes-melhores-anuncios-dropdown', 'value')]
 )
-def atualizar_tabela_e_imagem_melhores_anuncios(mes_selecionado):
-    try:
-        # Carregar os 5 melhores anúncios do Firebase
-        anuncios_firebase = db.child("melhores_anuncios").child(mes_selecionado).get().val()
-        imagem_firebase = db.child("imagens_melhores_anuncios").child(mes_selecionado).get().val()  # Pegar a imagem associada
+def atualizar_tabela_e_imagem_melhores_anuncios(ano_selecionado, mes_selecionado):
+    if not (ano_selecionado and mes_selecionado):
+        return dbc.Alert("Por favor, selecione um ano e um mês.", color="warning"), ""
 
-        if anuncios_firebase:
-            # Criar os dados para a tabela
-            anuncios_data = [
-                {"nome": anuncios_firebase[f"Anuncio_{i+1}"]['nome'], 
-                 "CTR": anuncios_firebase[f"Anuncio_{i+1}"]['CTR']} 
-                for i in range(5)
-            ]
-            
+    try:
+        # Buscar os dados de melhores anúncios do Firebase
+        dados_anuncios = db.child("melhores_anuncios").child(str(ano_selecionado)).child(mes_selecionado).get().val()
+        imagem_anuncio = db.child("imagens_melhores_anuncios").child(str(ano_selecionado)).child(mes_selecionado).get().val()  # Pegar a imagem associada
+
+        if dados_anuncios:
+            # Extrair os anúncios (assumindo que há pelo menos 5 anúncios)
+            anuncios_data = []
+            for i in range(1, 6):  # Anúncio_1 a Anúncio_5
+                anuncio_key = f"Anuncio_{i}"
+                anuncio = dados_anuncios.get(anuncio_key)
+                if anuncio:
+                    anuncios_data.append({
+                        "nome": anuncio.get('nome', 'N/A'), 
+                        "CTR": anuncio.get('CTR', 0)
+                    })
+                else:
+                    anuncios_data.append({"nome": "N/A", "CTR": 0})
+
             # Criar a tabela com os dados
             tabela = dash_table.DataTable(
                 columns=[
@@ -251,15 +291,20 @@ def atualizar_tabela_e_imagem_melhores_anuncios(mes_selecionado):
                 style_data={'backgroundColor': '#f9f9f9'},
                 style_data_conditional=[
                     {'if': {'row_index': 'odd'}, 'backgroundColor': '#e9e9e9'}
-                ]
+                ],
+                sort_action="native",
+                filter_action="native",
+                page_action="native",
+                page_size=10,
             )
 
             # Retornar a tabela e o link da imagem
-            return tabela, imagem_firebase if imagem_firebase else ""
+            return tabela, imagem_anuncio if imagem_anuncio else ""
         else:
             # Nenhum dado encontrado para o mês selecionado
-            return dbc.Alert("Nenhum dado encontrado para o mês selecionado.", color="warning"), ""
+            return dbc.Alert(f"Nenhum anúncio encontrado para {mes_selecionado} de {ano_selecionado}.", color="warning"), ""
     except Exception as e:
+        logging.error(f"Erro ao atualizar melhores anúncios: {e}")
         return dbc.Alert(f"Erro ao carregar dados: {str(e)}", color="danger"), ""
 
 # Dados de melhores anúncios (CTR) para todos os meses (Agosto e Setembro têm dados)
@@ -489,11 +534,11 @@ def renomear_conversoes_para_vendas():
 # Execute a função uma vez para renomear os dados existentes
 renomear_conversoes_para_vendas()
 # Função para criar o gráfico de média dos totais (incluindo Google Ads e Facebook Ads)
-def criar_grafico_media_totais(metrica_selecionada):
+def criar_grafico_media_totais(metrica_selecionada, anos_selecionados):
     try:
         logging.info(f"Atualizando gráfico para a métrica: {metrica_selecionada}")
         
-        # Buscar todos os meses disponíveis no Firebase
+        # Buscar todos os meses disponíveis no Firebase para os anos selecionados
         dados_desempenho = db.child("desempenho").get().val()
         
         if not dados_desempenho:
@@ -502,28 +547,31 @@ def criar_grafico_media_totais(metrica_selecionada):
         
         # Lista para armazenar os dados para o gráfico
         dados_para_grafico = {
+            'Ano': [],
             'Mês': [],
             'Plataforma': [],
             'Valor': []
         }
         
-        # Iterar sobre cada mês e plataforma para coletar os dados
-        for mes, plataformas in dados_desempenho.items():
-            for plataforma, metrics in plataformas.items():
-                # Obter o valor da métrica selecionada, garantindo que a chave exista
-                chave_firebase = mapa_metricas_firebase.get(metrica_selecionada, metrica_selecionada)
-                valor = metrics.get(chave_firebase, 0)
-                
-                # Converter valor para float se possível
-                try:
-                    valor = float(valor)
-                except (ValueError, TypeError):
-                    valor = 0.0
-                
-                dados_para_grafico['Mês'].append(mes)
-                dados_para_grafico['Plataforma'].append(plataforma)
-                dados_para_grafico['Valor'].append(valor)
-                logging.info(f"Mês: {mes}, Plataforma: {plataforma}, Valor: {valor}")
+        # Iterar sobre cada ano, mês e plataforma para coletar os dados
+        for ano in anos_selecionados:
+            anos_dados = dados_desempenho.get(str(ano), {})
+            for mes, plataformas in anos_dados.items():
+                for plataforma, metrics in plataformas.items():
+                    chave_firebase = mapa_metricas_firebase.get(metrica_selecionada, metrica_selecionada)
+                    valor = metrics.get(chave_firebase, 0)
+                    
+                    # Converter valor para float se possível
+                    try:
+                        valor = float(valor)
+                    except (ValueError, TypeError):
+                        valor = 0.0
+                    
+                    dados_para_grafico['Ano'].append(ano)
+                    dados_para_grafico['Mês'].append(mes)
+                    dados_para_grafico['Plataforma'].append(plataforma)
+                    dados_para_grafico['Valor'].append(valor)
+                    logging.info(f"Ano: {ano}, Mês: {mes}, Plataforma: {plataforma}, Valor: {valor}")
         
         # Criar DataFrame
         df_grafico = pd.DataFrame(dados_para_grafico)
@@ -535,7 +583,7 @@ def criar_grafico_media_totais(metrica_selecionada):
         ]
         
         df_grafico['Mês'] = pd.Categorical(df_grafico['Mês'], categories=meses_ordenados, ordered=True)
-        df_grafico.sort_values('Mês', inplace=True)
+        df_grafico.sort_values(['Ano', 'Mês'], inplace=True)
         
         # Formatar os valores conforme a métrica
         if "R$" in metrica_selecionada:
@@ -558,7 +606,9 @@ def criar_grafico_media_totais(metrica_selecionada):
             title=f"{metrica_selecionada} - Média dos Totais",
             labels={'Valor': metrica_selecionada, 'Mês': 'Mês'},
             text='Valor',
-            height=500
+            height=500,
+            facet_col='Ano',
+            facet_col_wrap=2
         )
         
         # Atualizar layout do gráfico
@@ -566,6 +616,13 @@ def criar_grafico_media_totais(metrica_selecionada):
             plot_bgcolor=secondary_color,
             paper_bgcolor=secondary_color,
             font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
             title_x=0.5
         )
         
@@ -772,8 +829,21 @@ admin_page_1_layout = html.Div([
     html.H1("Admin: Editar Desempenho", className="text-center", 
             style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
 
-    # Formulário de edição
+    # Seletores de Ano e Mês
     dbc.Form([
+        dbc.Row([
+            dbc.Label("Ano:", html_for="edit-ano", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dcc.Dropdown(
+                    id='edit-ano',
+                    options=[{'label': ano, 'value': ano} for ano in range(2021, 2026)],
+                    value=2024,
+                    clearable=False,
+                    style={'font-size': '18px'}
+                ),
+                width=10,
+            ),
+        ], className="mb-3"),
         dbc.Row([
             dbc.Label("Mês:", html_for="edit-mes", width=2, style={'font-size': '20px'}),
             dbc.Col(
@@ -866,22 +936,40 @@ admin_page_1_layout = html.Div([
 admin_page_3_layout = html.Div([
     html.H1("Gerenciar Melhores Anúncios", className="text-center",
             style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
-
-    # Seletor de Mês
-    html.Div([
-        html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
-        dcc.Dropdown(
-            id='mes-anuncio-dropdown',
-            options=[{'label': mes, 'value': mes} for mes in meses_completos],
-            value='Agosto',
-            clearable=False,
-            style={'width': '50%', 'margin': 'auto'}
-        )
-    ], style={'text-align': 'center', 'margin-top': '20px'}),
-
+    
+    # Seletores de Ano e Mês
+    dbc.Form([
+        dbc.Row([
+            dbc.Label('Ano:', html_for="admin-anuncio-ano", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dcc.Dropdown(
+                    id='admin-anuncio-ano',
+                    options=[{'label': ano, 'value': ano} for ano in range(2021, 2026)],
+                    value=2024,
+                    clearable=False,
+                    style={'font-size': '18px'}
+                ),
+                width=10,
+            ),
+        ], className="mb-3"),
+        dbc.Row([
+            dbc.Label('Mês:', html_for="admin-anuncio-mes", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dcc.Dropdown(
+                    id='admin-anuncio-mes',
+                    options=[{'label': mes, 'value': mes} for mes in meses_completos],
+                    value='Agosto',
+                    clearable=False,
+                    style={'font-size': '18px'}
+                ),
+                width=10,
+            ),
+        ], className="mb-3"),
+    ], style={'width': '600px', 'margin': 'auto', 'margin-top': '20px'}),
+    
     # Tabela para exibir e editar os anúncios existentes
     html.Div([
-        html.H3("Editar Nome e CTR dos 5 Anúncios", className="text-center", style={'font-size': '24px', 'font-weight': '700'}),
+        html.H3("Editar Nome e CTR dos Anúncios", className="text-center", style={'font-size': '24px', 'font-weight': '700'}),
         dash_table.DataTable(
             id='tabela-edicao-anuncios',
             columns=[
@@ -896,42 +984,61 @@ admin_page_3_layout = html.Div([
             style_data_conditional=[{'if': {'row_index': 'odd'}, 'backgroundColor': '#e9e9e9'}]
         )
     ], style={'margin-top': '20px'}),
-
-    # Link da Imagem e Visualização
+    
+    # Campo para Link da Imagem e Visualização
     html.Div([
-        html.Label("Link da Imagem para o Mês Selecionado:", style={'font-weight': 'bold', 'font-size': '16px'}),
-        dbc.Input(id='input-link-imagem', type='text', placeholder='Digite o link da imagem...',
-                  style={'width': '70%', 'margin': 'auto', 'display': 'block', 'font-size': '16px'}),
-        # Exibir a imagem do link fornecido
-        html.Div([
-            html.H3("Prévia da Imagem dos Anúncios", className="text-center", style={'font-size': '24px', 'font-weight': '700'}),
-            html.Img(id='imagem-preview-anuncios', src="", style={'max-width': '100%', 'height': 'auto', 'margin': 'auto'})
-        ], style={'text-align': 'center', 'margin-top': '20px'})
+        dbc.Row([
+            dbc.Col([
+                html.Label("Link da Imagem para o Mês Selecionado:", style={'font-weight': '700', 'font-size': '16px'}),
+                dbc.Input(id='admin-link-imagem', type='text', placeholder='Digite o link da imagem...',
+                          style={'width': '70%', 'margin': 'auto', 'display': 'block', 'font-size': '16px'}),
+            ], width=12)
+        ], style={'margin-top': '20px'}),
+        dbc.Row([
+            dbc.Col([
+                html.H3("Prévia da Imagem dos Anúncios", className="text-center", style={'font-size': '24px', 'font-weight': '700'}),
+                html.Img(id='admin-imagem-preview-anuncios', src="", style={'max-width': '100%', 'height': 'auto', 'margin': 'auto'})
+            ], width=12)
+        ], style={'text-align': 'center', 'margin-top': '20px'}),
     ], style={'margin-top': '30px', 'margin-bottom': '30px'}),
-
+    
     # Botão para salvar as alterações
-    html.Button('Salvar Alterações', id='btn-salvar-anuncios', n_clicks=0,
-                style={'background-color': '#28a745', 'color': 'white', 'font-weight': 'bold',
-                       'padding': '10px 20px', 'margin-top': '30px', 'display': 'block', 'margin': 'auto'}),
-
+    html.Div([
+        html.Button('Salvar Alterações', id='admin-btn-salvar-anuncios', n_clicks=0,
+                    style={'background-color': '#28a745', 'color': 'white', 'font-weight': 'bold',
+                           'padding': '10px 20px', 'margin-top': '30px', 'display': 'block', 'margin': 'auto'}),
+    ], style={'text-align': 'center'}),
+    
     # Feedback de atualização
-    html.Div(id='feedback-anuncios', style={'margin-top': '20px', 'font-size': '18px', 'color': '#28a745'}),
-
-    # Navegação entre páginas administrativas
+    html.Div(id='admin-feedback-anuncios', style={'margin-top': '20px', 'font-size': '18px', 'color': '#28a745'}),
+    
+    # Botões de navegação entre páginas administrativas
     botoes_navegacao(prev_href='/admin/page-2', next_href='/admin/page-4')
 ], style={'padding': '20px', 'background-color': secondary_color})
 admin_page_4_layout = html.Div([
     html.H1("Admin: Editar Cliques por Estado", className="text-center", 
             style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
     
-    # Formulário de edição
+    # Seletores de Ano e Mês
     dbc.Form([
-        # Selecionar Mês
         dbc.Row([
-            dbc.Label("Mês:", html_for="edit-mes-cliques", width=2, style={'font-size': '20px'}),
+            dbc.Label("Ano:", html_for="admin-cliques-ano", width=2, style={'font-size': '20px'}),
             dbc.Col(
                 dcc.Dropdown(
-                    id='edit-mes-cliques',
+                    id='admin-cliques-ano',
+                    options=[{'label': ano, 'value': ano} for ano in range(2021, 2026)],
+                    value=2024,
+                    clearable=False,
+                    style={'font-size': '18px'}
+                ),
+                width=10,
+            ),
+        ], className="mb-3"),
+        dbc.Row([
+            dbc.Label("Mês:", html_for="admin-cliques-mes", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dcc.Dropdown(
+                    id='admin-cliques-mes',
                     options=[{'label': mes, 'value': mes} for mes in meses_completos],
                     value='Agosto',
                     clearable=False,
@@ -940,36 +1047,39 @@ admin_page_4_layout = html.Div([
                 width=10,
             ),
         ], className="mb-3"),
-        
-        # Tabela para inserir estados e cliques
-        html.Div([
-            dash_table.DataTable(
-                id='tabela-cliques-estado',
-                columns=[
-                    {'name': 'Estado', 'id': 'estado', 'type': 'text', 'editable': True},
-                    {'name': 'Cliques', 'id': 'cliques', 'type': 'numeric', 'editable': True}
-                ],
-                data=[{'estado': '', 'cliques': 0} for _ in range(10)],  # Até 10 estados
-                row_deletable=False,
-                style_table={'overflowX': 'auto', 'width': '100%'},
-                style_cell={'textAlign': 'center', 'padding': '5px', 'font-family': 'Montserrat, sans-serif'},
-                style_header={'backgroundColor': primary_color, 'fontWeight': 'bold', 'color': 'white'},
-                style_data={'backgroundColor': '#f9f9f9'},
-                style_data_conditional=[
-                    {'if': {'row_index': 'odd'}, 'backgroundColor': '#e9e9e9'}
-                ]
-            )
-        ], style={'margin-top': '20px'}),
-        
-        # Botão de salvar
-        dbc.Button("Salvar", id="salvar-cliques-estado", color="primary", 
+    ], style={'width': '600px', 'margin': 'auto', 'margin-top': '20px'}),
+    
+    # Tabela para inserir estados e cliques
+    html.Div([
+        html.H3("Editar Cliques por Estado", className="text-center", style={'font-size': '24px', 'font-weight': '700'}),
+        dash_table.DataTable(
+            id='tabela-cliques-estado',
+            columns=[
+                {'name': 'Estado', 'id': 'estado', 'type': 'text', 'editable': True},
+                {'name': 'Cliques', 'id': 'cliques', 'type': 'numeric', 'editable': True}
+            ],
+            data=[{'estado': '', 'cliques': 0} for _ in range(10)],  # Até 10 estados
+            row_deletable=False,
+            style_table={'overflowX': 'auto', 'width': '100%'},
+            style_cell={'textAlign': 'center', 'padding': '5px', 'font-family': 'Montserrat, sans-serif'},
+            style_header={'backgroundColor': primary_color, 'fontWeight': 'bold', 'color': 'white'},
+            style_data={'backgroundColor': '#f9f9f9'},
+            style_data_conditional=[
+                {'if': {'row_index': 'odd'}, 'backgroundColor': '#e9e9e9'}
+            ]
+        )
+    ], style={'margin-top': '20px'}),
+    
+    # Botão de salvar
+    html.Div([
+        dbc.Button("Salvar", id="admin-btn-salvar-cliques-estado", color="primary", 
                    style={'font-size': '18px', 'width': '100%', 'margin-top': '20px'}),
-    ], style={'width': '800px', 'margin': 'auto', 'margin-top': '50px'}),
+    ], style={'width': '800px', 'margin': 'auto', 'margin-top': '20px'}),
     
     # Feedback de Edição
-    html.Div(id='editar-cliques-feedback', style={'text-align': 'center', 'margin-top': '10px'}),
+    html.Div(id='admin-feedback-cliques-estado', style={'text-align': 'center', 'margin-top': '10px'}),
     
-    # Botões de navegação
+    # Botões de navegação entre páginas administrativas
     botoes_navegacao(prev_href='/admin/page-3', next_href='/admin/page-5')
 ], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif', 
           'background-color': secondary_color, 'padding': '20px', 
@@ -978,13 +1088,13 @@ admin_page_5_layout = html.Div([
     html.H1("Admin: Editar Valores Individuais de Cada Produto", className="text-center", 
             style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
     
-    # Formulário de edição
+    # Seletores de Produto, Ano e Mês
     dbc.Form([
         dbc.Row([
-            dbc.Label("Produto:", html_for="edit-produto", width=2, style={'font-size': '20px'}),
+            dbc.Label("Produto:", html_for="admin-produto-select", width=2, style={'font-size': '20px'}),
             dbc.Col(
                 dcc.Dropdown(
-                    id='edit-produto',
+                    id='admin-produto-select',
                     options=[{'label': produto, 'value': produto} for produto in ['Kit Plantio', 'Turbo Mix', 'Vollverini', 'Best Mix', 'Nitro Mix']],
                     value='Kit Plantio',
                     clearable=False,
@@ -993,12 +1103,24 @@ admin_page_5_layout = html.Div([
                 width=10,
             ),
         ], className="mb-3"),
-        
         dbc.Row([
-            dbc.Label("Mês:", html_for="edit-mes-produto", width=2, style={'font-size': '20px'}),
+            dbc.Label("Ano:", html_for="admin-produto-ano", width=2, style={'font-size': '20px'}),
             dbc.Col(
                 dcc.Dropdown(
-                    id='edit-mes-produto',
+                    id='admin-produto-ano',
+                    options=[{'label': ano, 'value': ano} for ano in range(2021, 2026)],
+                    value=2024,
+                    clearable=False,
+                    style={'font-size': '18px'}
+                ),
+                width=10,
+            ),
+        ], className="mb-3"),
+        dbc.Row([
+            dbc.Label("Mês:", html_for="admin-produto-mes", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dcc.Dropdown(
+                    id='admin-produto-mes',
                     options=[{'label': mes, 'value': mes} for mes in meses_completos],
                     value='Agosto',
                     clearable=False,
@@ -1008,45 +1130,62 @@ admin_page_5_layout = html.Div([
             ),
         ], className="mb-3"),
         
+        # Campos de Entrada para Valor Investido e Retorno
         dbc.Row([
-            dbc.Label("Valor Investido (R$):", html_for="edit-valor-investido", width=2, style={'font-size': '20px'}),
+            dbc.Label("Valor Investido (R$):", html_for="admin-valor-investido", width=2, style={'font-size': '20px'}),
             dbc.Col(
-                dbc.Input(type="number", id="edit-valor-investido", placeholder="Digite o valor investido", style={'font-size': '18px'}),
+                dbc.Input(type="number", id="admin-valor-investido", placeholder="Digite o valor investido", style={'font-size': '18px'}),
                 width=10,
             ),
         ], className="mb-3"),
         
         dbc.Row([
-            dbc.Label("Retorno (R$):", html_for="edit-retorno", width=2, style={'font-size': '20px'}),
+            dbc.Label("Retorno (R$):", html_for="admin-retorno-produto", width=2, style={'font-size': '20px'}),
             dbc.Col(
-                dbc.Input(type="number", id="edit-retorno", placeholder="Digite o retorno", style={'font-size': '18px'}),
+                dbc.Input(type="number", id="admin-retorno-produto", placeholder="Digite o retorno", style={'font-size': '18px'}),
                 width=10,
             ),
         ], className="mb-3"),
         
-        # Botão de salvar
-        dbc.Button("Salvar", id="salvar-produto", color="primary", style={'font-size': '18px', 'width': '100%'}, className="mt-3")
-    ], style={'width': '600px', 'margin': 'auto', 'margin-top': '50px'}),
+        # Botão de Salvar
+        dbc.Button("Salvar", id="admin-btn-salvar-produto", color="primary", 
+                   style={'font-size': '18px', 'width': '100%'}, className="mt-3")
+    ], style={'width': '800px', 'margin': 'auto', 'margin-top': '50px'}),
     
     # Feedback de Edição
-    html.Div(id='editar-produto-feedback', style={'text-align': 'center', 'margin-top': '10px'}),
+    html.Div(id='admin-feedback-produto', style={'text-align': 'center', 'margin-top': '10px'}),
     
-    # Botões de navegação
+    # Botões de navegação entre páginas administrativas
     botoes_navegacao(prev_href='/admin/page-4', next_href='/admin/page-6')
-], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif', 'background-color': secondary_color, 'padding': '20px', 'min-height': '100vh'})
+], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif', 
+          'background-color': secondary_color, 'padding': '20px', 
+          'min-height': '100vh'})
 # Admin page 6 layout: Editar Funil de Vendas
 # Página Administrativa de Edição de Funil de Vendas (/admin/page-6)
 admin_page_6_layout = html.Div([
     html.H1("Admin: Editar Funil de Vendas", className="text-center", 
             style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
     
-    # Formulário de edição
+    # Seletores de Ano e Mês
     dbc.Form([
         dbc.Row([
-            dbc.Label("Mês:", html_for="edit-mes-funil", width=2, style={'font-size': '20px'}),
+            dbc.Label("Ano:", html_for="admin-funil-ano", width=2, style={'font-size': '20px'}),
             dbc.Col(
                 dcc.Dropdown(
-                    id='edit-mes-funil',
+                    id='admin-funil-ano',
+                    options=[{'label': ano, 'value': ano} for ano in range(2021, 2026)],
+                    value=2024,
+                    clearable=False,
+                    style={'font-size': '18px'}
+                ),
+                width=10,
+            ),
+        ], className="mb-3"),
+        dbc.Row([
+            dbc.Label("Mês:", html_for="admin-funil-mes", width=2, style={'font-size': '20px'}),
+            dbc.Col(
+                dcc.Dropdown(
+                    id='admin-funil-mes',
                     options=[{'label': mes, 'value': mes} for mes in meses_completos],
                     value='Agosto',
                     clearable=False,
@@ -1055,39 +1194,43 @@ admin_page_6_layout = html.Div([
                 width=10,
             ),
         ], className="mb-3"),
-        
+    ], style={'width': '600px', 'margin': 'auto', 'margin-top': '20px'}),
+    
+    # Campos de Entrada para Funil de Vendas
+    dbc.Form([
         dbc.Row([
-            dbc.Label("Leads Frios:", html_for="edit-leads-frios", width=2, style={'font-size': '20px'}),
+            dbc.Label("Leads Frios:", html_for="admin-funil-leads-frios", width=2, style={'font-size': '20px'}),
             dbc.Col(
-                dbc.Input(type="number", id="edit-leads-frios", placeholder="Digite o número de Leads Frios", style={'font-size': '18px'}),
+                dbc.Input(type="number", id="admin-funil-leads-frios", placeholder="Digite o número de Leads Frios", style={'font-size': '18px'}),
                 width=10,
             ),
         ], className="mb-3"),
         
         dbc.Row([
-            dbc.Label("Atendidos:", html_for="edit-atendidos", width=2, style={'font-size': '20px'}),
+            dbc.Label("Atendidos:", html_for="admin-funil-atendidos", width=2, style={'font-size': '20px'}),
             dbc.Col(
-                dbc.Input(type="number", id="edit-atendidos", placeholder="Digite o número de Atendidos", style={'font-size': '18px'}),
+                dbc.Input(type="number", id="admin-funil-atendidos", placeholder="Digite o número de Atendidos", style={'font-size': '18px'}),
                 width=10,
             ),
         ], className="mb-3"),
         
         dbc.Row([
-            dbc.Label("Vendas:", html_for="edit-vendas", width=2, style={'font-size': '20px'}),  # Alterado de Conversões para Vendas
+            dbc.Label("Vendas:", html_for="admin-funil-vendas", width=2, style={'font-size': '20px'}),
             dbc.Col(
-                dbc.Input(type="number", id="edit-vendas", placeholder="Digite o número de Vendas", style={'font-size': '18px'}),  # ID alterado
+                dbc.Input(type="number", id="admin-funil-vendas", placeholder="Digite o número de Vendas", style={'font-size': '18px'}),
                 width=10,
             ),
         ], className="mb-3"),
         
-        # Botão de salvar
-        dbc.Button("Salvar", id="salvar-funil", color="primary", style={'font-size': '18px', 'width': '100%'}, className="mt-3")
-    ], style={'width': '600px', 'margin': 'auto', 'margin-top': '50px'}),
+        # Botão de Salvar
+        dbc.Button("Salvar", id="admin-btn-salvar-funil", color="primary", 
+                   style={'font-size': '18px', 'width': '100%'}, className="mt-3")
+    ], style={'width': '800px', 'margin': 'auto', 'margin-top': '20px'}),
     
     # Feedback de Edição
-    html.Div(id='editar-funil-feedback', style={'text-align': 'center', 'margin-top': '10px'}),
+    html.Div(id='admin-feedback-funil', style={'text-align': 'center', 'margin-top': '10px'}),
     
-    # Botões de navegação
+    # Botões de navegação entre páginas administrativas
     botoes_navegacao(prev_href='/admin/page-5', next_href='/admin/page-7')
 ], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif', 
           'background-color': secondary_color, 'padding': '20px', 
@@ -1133,27 +1276,38 @@ admin_page_layouts = {
               'background-color': secondary_color, 'padding': '20px',
               'min-height': '100vh'}),
 }
-    
+  
 public_page_1_layout = html.Div([
     # Título da Página
     html.H1("Desempenho de Facebook e Google Ads", className="text-center",
             style={'font-size': '36px', 'font-weight': '700', 'color': primary_color}),
-
-    # Seletor de Mês
+    
+    # Seletores de Ano e Mês
     html.Div([
-        html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
-        dcc.Dropdown(
-            id='mes-desempenho-dropdown',
-            options=[{'label': mes, 'value': mes} for mes in meses_completos],
-            value='Agosto',  # Valor padrão
-            clearable=False,
-            style={'width': '50%', 'margin': 'auto'}
-        )
+        dbc.Row([
+            dbc.Col([
+                html.Label('Selecionar Ano:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='ano-desempenho-dropdown',
+                    options=[{'label': ano, 'value': ano} for ano in range(2021, 2026)],
+                    value=2024,  # Valor padrão (atual)
+                    clearable=False,
+                    style={'width': '90%', 'margin': 'auto'}
+                )
+            ], md=6),
+            dbc.Col([
+                html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='mes-desempenho-dropdown',
+                    options=[{'label': mes, 'value': mes} for mes in meses_completos],
+                    value='Agosto',  # Valor padrão
+                    clearable=False,
+                    style={'width': '90%', 'margin': 'auto'}
+                )
+            ], md=6),
+        ], justify='center')
     ], style={'text-align': 'center', 'margin-top': '20px'}),
-
-    # Mensagem de erro
-    html.Div(id='erro-msg', style={'color': 'red', 'font-size': '18px', 'text-align': 'center', 'margin-top': '10px'}),
-
+    
     # Tabela de Desempenho
     html.Div([
         dash_table.DataTable(
@@ -1189,7 +1343,7 @@ public_page_1_layout = html.Div([
             ]
         )
     ], style={'position': 'relative', 'height': 'auto', 'margin-top': '30px'}),
-
+    
     # Quadros de Totais na Parte Inferior
     html.Div([
         html.Div([
@@ -1200,7 +1354,7 @@ public_page_1_layout = html.Div([
         ], style={
             'background-color': '#28a745', 'color': 'white', 'padding': '10px',
             'border-radius': '10px', 'margin': '10px', 'width': '180px', 'text-align': 'center'}),
-
+    
         html.Div([
             html.Div("Total de Cliques no link:", style={
                 'font-weight': 'bold', 'font-size': '16px', 'margin-bottom': '5px'}),
@@ -1209,7 +1363,7 @@ public_page_1_layout = html.Div([
         ], style={
             'background-color': '#007bff', 'color': 'white', 'padding': '10px',
             'border-radius': '10px', 'margin': '10px', 'width': '180px', 'text-align': 'center'}),
-
+    
         html.Div([
             html.Div("Total de Resultados:", style={
                 'font-weight': 'bold', 'font-size': '16px', 'margin-bottom': '5px'}),
@@ -1218,7 +1372,7 @@ public_page_1_layout = html.Div([
         ], style={
             'background-color': '#ffc107', 'color': 'white', 'padding': '10px',
             'border-radius': '10px', 'margin': '10px', 'width': '180px', 'text-align': 'center'}),
-
+    
         html.Div([
             html.Div("Orçamento Total (R$):", style={
                 'font-weight': 'bold', 'font-size': '16px', 'margin-bottom': '5px'}),
@@ -1230,13 +1384,31 @@ public_page_1_layout = html.Div([
     ], style={
         'display': 'flex', 'justify-content': 'center', 'align-items': 'center',
         'margin-top': '150px'}),  # Posição mais baixa na tela
-
+    
+    # Análise de Tendência
+    html.Div([
+        html.H3("Análise de Tendência das Métricas", className="text-center", 
+                style={'font-size': '24px', 'color': primary_color, 'font-weight': '700'}),
+        dcc.Graph(id='trend-analysis-page1', style={'margin-top': '20px'})
+    ], style={'margin-top': '40px', 'padding': '20px', 'background-color': '#FFFFFF', 'border-radius': '5px'}),
+    
+    # Div para mensagens de erro
+    html.Div(id='erro-msg', style={
+        'color': 'red', 
+        'font-size': '16px', 
+        'text-align': 'center', 
+        'margin-top': '10px'
+    }),
+    
     # Botões de navegação entre páginas
     botoes_navegacao(prev_href='/', next_href='/page-2')
 ], style={
-    'color': '#343a40', 'font-family': 'Montserrat, sans-serif',
-    'background-color': secondary_color, 'padding': '20px',
-    'min-height': '100vh'})
+    'color': '#343a40', 
+    'font-family': 'Montserrat, sans-serif',
+    'background-color': secondary_color, 
+    'padding': '20px',
+    'min-height': '100vh'
+})
 @app.callback(
     [Output('tabela-desempenho', 'data'),
      Output('total-impressao', 'children'),
@@ -1244,19 +1416,20 @@ public_page_1_layout = html.Div([
      Output('total-resultados', 'children'),
      Output('total-orcamento', 'children'),
      Output('erro-msg', 'children')],
-    [Input('mes-desempenho-dropdown', 'value')]
+    [Input('ano-desempenho-dropdown', 'value'),
+     Input('mes-desempenho-dropdown', 'value')]
 )
-def update_tabela_e_totais(mes_selecionado):
-    if not mes_selecionado:
-        return [], "0", "0", "0", "0", "⚠️ Por favor, selecione um mês."
-
+def update_tabela_desempenho(ano_selecionado, mes_selecionado):
+    if not (ano_selecionado and mes_selecionado):
+        return [], "0", "0", "0", "0", "⚠️ Por favor, selecione um ano e um mês."
+    
     try:
-        # Obter os dados do Firebase para o mês especificado
-        dados_mes = db.child("desempenho").child(mes_selecionado).get().val()
-
+        # Obter os dados do Firebase para o ano e mês especificados
+        dados_mes = db.child("desempenho").child(str(ano_selecionado)).child(mes_selecionado).get().val()
+    
         if not dados_mes:
-            return [], "0", "0", "0", "0", f"⚠️ Dados não encontrados para o mês {mes_selecionado}."
-
+            return [], "0", "0", "0", "0", f"⚠️ Dados não encontrados para {mes_selecionado} de {ano_selecionado}."
+    
         # Estrutura de dados para preencher a tabela
         data = {
             'Plataforma': [],
@@ -1267,13 +1440,13 @@ def update_tabela_e_totais(mes_selecionado):
             'CTR (%)': [],
             'CPL (R$)': []
         }
-
+    
         # Preencher os valores para cada plataforma
         total_impressao = 0
         total_cliques = 0
         total_resultado = 0
         total_orcamento = 0
-
+    
         for plataforma, metrics in dados_mes.items():
             data['Plataforma'].append(plataforma)
             impressoes = float(metrics.get('Impressoes', 0))
@@ -1282,22 +1455,21 @@ def update_tabela_e_totais(mes_selecionado):
             orcamento = float(metrics.get('Orcamento', 0))
             ctr = float(metrics.get('CTR', 0))
             cpl = float(metrics.get('CPL', 0))
-
+    
             data['Impressões'].append(formatar_valor(metrica='Impressões', valor=impressoes))
             data['Cliques no link'].append(formatar_valor(metrica='Cliques no link', valor=cliques))
             data['Resultados'].append(formatar_valor(metrica='Resultados', valor=resultados))
             data['Orçamento (R$)'].append(formatar_valor(metrica='Orçamento (R$)', valor=orcamento))
             data['CTR (%)'].append(formatar_valor(metrica='CTR (%)', valor=ctr))
             data['CPL (R$)'].append(formatar_valor(metrica='CPL (R$)', valor=cpl))
-
+    
             # Somar os totais para exibir nos quadros
             total_impressao += impressoes
             total_cliques += cliques
             total_resultado += resultados
             total_orcamento += orcamento
-
-        # Aqui, você pode converter `data` para o formato esperado pela tabela
-        # Supondo que `tabela-desempenho` espera uma lista de dicionários
+    
+        # Preparar os dados para a tabela
         tabela_dados = []
         for i in range(len(data['Plataforma'])):
             tabela_dados.append({
@@ -1309,7 +1481,7 @@ def update_tabela_e_totais(mes_selecionado):
                 'CTR (%)': data['CTR (%)'][i],
                 'CPL (R$)': data['CPL (R$)'][i]
             })
-
+    
         return (
             tabela_dados, 
             f"{total_impressao:,.0f}".replace(",", "."), 
@@ -1346,53 +1518,55 @@ def salvar_dados_produto(n_clicks, produto, mes, valor_investido, retorno):
             feedback = dbc.Alert(f"Erro ao salvar os dados: {str(e)}", color="danger")
             return [feedback]
     return [dash.no_update]
-@app.callback(
-    [Output('editar-funil-feedback', 'children'),
-     Output('edit-leads-frios', 'value'),
-     Output('edit-atendidos', 'value'),
-     Output('edit-vendas', 'value')],  # Alterado de 'edit-conversoes' para 'edit-vendas'
-    [Input('salvar-funil', 'n_clicks'),
-     Input('edit-mes-funil', 'value')],
-    [State('edit-leads-frios', 'value'),
-     State('edit-atendidos', 'value'),
-     State('edit-vendas', 'value')]  # Alterado de 'edit-conversoes' para 'edit-vendas'
+app.callback(
+    [Output('admin-feedback-funil', 'children'),
+     Output('admin-funil-leads-frios', 'value'),
+     Output('admin-funil-atendidos', 'value'),
+     Output('admin-funil-vendas', 'value')],
+    [Input('admin-btn-salvar-funil', 'n_clicks')],
+    [State('admin-funil-ano', 'value'),
+     State('admin-funil-mes', 'value'),
+     State('admin-funil-leads-frios', 'value'),
+     State('admin-funil-atendidos', 'value'),
+     State('admin-funil-vendas', 'value')]
 )
-
-def salvar_ou_carregar_funil(n_clicks, mes, leads_frios, atendidos, vendas):
-    ctx = dash.callback_context
-    trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
-
-    if trigger_id == 'edit-mes-funil' and mes:
+def salvar_ou_carregar_funil(n_clicks, ano, mes, leads_frios, atendidos, vendas):
+    if n_clicks and n_clicks > 0:
+        # Validar os dados de entrada
+        if not all([ano, mes, leads_frios is not None, atendidos is not None, vendas is not None]):
+            return [dbc.Alert("⚠️ Por favor, preencha todos os campos.", color="danger")], leads_frios, atendidos, vendas
         try:
-            dados_mes = db.child("funil_vendas").child(mes).get().val()
-            if dados_mes:
-                leads_frios = dados_mes.get('Leads Frios', 0)
-                atendidos = dados_mes.get('Atendidos', 0)
-                vendas = dados_mes.get('Vendas', 0)  # Alterado de 'Conversões' para 'Vendas'
-                return [dbc.Alert(f"Dados carregados para {mes}.", color="info")], leads_frios, atendidos, vendas
-            else:
-                return [dbc.Alert(f"Nenhum dado encontrado para {mes}.", color="warning")], None, None, None
-        except Exception as e:
-            return [dbc.Alert(f"Erro ao carregar dados: {str(e)}", color="danger")], None, None, None
-
-    elif trigger_id == 'salvar-funil' and n_clicks > 0:
-        try:
-            if leads_frios is None or atendidos is None or vendas is None:
-                return [dbc.Alert("Por favor, preencha todos os campos.", color="danger")], leads_frios, atendidos, vendas
-
-            db.child("funil_vendas").child(mes).update({
+            # Atualizar os dados no Firebase
+            db.child("funil_vendas").child(str(ano)).child(mes).update({
                 'Leads Frios': int(leads_frios),
                 'Atendidos': int(atendidos),
-                'Vendas': int(vendas)  # Alterado de 'Conversões' para 'Vendas'
+                'Vendas': int(vendas)
             })
-            return [dbc.Alert("Dados salvos com sucesso!", color="success")], leads_frios, atendidos, vendas
+            feedback = dbc.Alert("Dados salvos com sucesso!", color="success")
+            return [feedback], leads_frios, atendidos, vendas
         except Exception as e:
+            logging.error(f"Erro ao salvar funil de vendas: {e}")
             return [dbc.Alert(f"Erro ao salvar os dados: {str(e)}", color="danger")], leads_frios, atendidos, vendas
-
-    return dash.no_update, leads_frios, atendidos, vendas
+    else:
+        # Carregar os dados existentes quando os seletores são alterados
+        try:
+            ano = str(ano)  # Garantir que o ano seja string
+            dados_funil = db.child("funil_vendas").child(ano).child(mes).get().val()
+            if dados_funil:
+                leads_frios = dados_funil.get('Leads Frios', 0)
+                atendidos = dados_funil.get('Atendidos', 0)
+                vendas = dados_funil.get('Vendas', 0)
+                feedback = dbc.Alert(f"Dados carregados para {mes}/{ano}.", color="info")
+                return [feedback], leads_frios, atendidos, vendas
+            else:
+                return [dbc.Alert(f"⚠️ Nenhum dado encontrado para {mes}/{ano}.", color="warning")], None, None, None
+        except Exception as e:
+            logging.error(f"Erro ao carregar funil de vendas: {e}")
+            return [dbc.Alert(f"Erro ao carregar os dados: {str(e)}", color="danger")], None, None, None
     
 def load_produtos_data():
     dados_produtos = {
+        'Ano': [],
         'Mês': [],
         'Produto': [],
         'Valor Investido (R$)': [],
@@ -1404,15 +1578,17 @@ def load_produtos_data():
         logging.info(f"Dados carregados de 'produtos': {produtos_data}")
         
         if produtos_data:
-            for produto, meses_data in produtos_data.items():
-                for mes in meses_completos:
-                    dados_produtos['Mês'].append(mes)
-                    dados_produtos['Produto'].append(produto)
-                    mes_data = meses_data.get(mes, {})
-                    valor_investido = mes_data.get('Valor_Investido_R', 0)  # Chaves corrigidas
-                    retorno = mes_data.get('Retorno_R', 0)  # Chaves corrigidas
-                    dados_produtos['Valor Investido (R$)'].append(valor_investido)
-                    dados_produtos['Retorno (R$)'].append(retorno)
+            for produto, anos_data in produtos_data.items():
+                for ano, meses_data in anos_data.items():
+                    for mes in meses_completos:
+                        dados_produtos['Ano'].append(int(ano))
+                        dados_produtos['Mês'].append(mes)
+                        dados_produtos['Produto'].append(produto)
+                        mes_data = meses_data.get(mes, {})
+                        valor_investido = mes_data.get('Valor Investido_R', 0)  # Chaves corrigidas
+                        retorno = mes_data.get('Retorno_R', 0)  # Chaves corrigidas
+                        dados_produtos['Valor Investido (R$)'].append(valor_investido)
+                        dados_produtos['Retorno (R$)'].append(retorno)
         else:
             logging.warning("Nenhum dado encontrado para 'produtos' no Firebase.")
     except Exception as e:
@@ -1431,30 +1607,32 @@ def load_produtos_data():
     
     return df_produtos
 # Carregar os dados dos produtos
+
 dados_produtos = load_produtos_data()
 df_produtos = pd.DataFrame(dados_produtos)
 def load_funil_data():
-    df_funil = pd.DataFrame(columns=['Mês', 'Leads Frios', 'Atendidos', 'Vendas'])  # Alterado de 'Conversões' para 'Vendas'
+    df_funil = pd.DataFrame(columns=['Ano', 'Mês', 'Leads Frios', 'Atendidos', 'Vendas'])
     try:
         funil_data = db.child("funil_vendas").get().val()
         if funil_data:
-            for mes in meses_completos:
-                mes_data = funil_data.get(mes, {})
-                leads_frios = mes_data.get('Leads Frios', 0)
-                atendidos = mes_data.get('Atendidos', 0)
-                vendas = mes_data.get('Vendas', 0)  # Alterado de 'Conversões' para 'Vendas'
-                df_funil = pd.concat([df_funil, pd.DataFrame([{
-    'Mês': mes,
-    'Leads Frios': leads_frios,
-    'Atendidos': atendidos,
-    'Vendas': vendas
-}])], ignore_index=True)
+            for ano, meses_data in funil_data.items():
+                for mes in meses_completos:
+                    mes_data = meses_data.get(mes, {})
+                    leads_frios = mes_data.get('Leads Frios', 0)
+                    atendidos = mes_data.get('Atendidos', 0)
+                    vendas = mes_data.get('Vendas', 0)
+                    df_funil = df_funil.append({
+                        'Ano': ano,
+                        'Mês': mes,
+                        'Leads Frios': leads_frios,
+                        'Atendidos': atendidos,
+                        'Vendas': vendas
+                    }, ignore_index=True)
         else:
-            print("Nenhum dado encontrado para 'funil_vendas' no Firebase.")
+            logging.warning("Nenhum dado encontrado para 'funil_vendas' no Firebase.")
     except Exception as e:
-        print(f"Erro ao carregar dados de funil_vendas do Firebase: {e}")
+        logging.error(f"Erro ao carregar dados de funil_vendas do Firebase: {e}")
     return df_funil
-
 # Carregar os dados do funil de vendas
 df_funil = load_funil_data()
 pagina_navegacao = {
@@ -1478,17 +1656,31 @@ public_page_2_layout = html.Div([
     html.H1("Comparação de Todos os Meses", className="text-center", 
             style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'}),
 
-    # Seletor de Meses
+    # Seletores de Ano e Meses
     html.Div([
-        html.Label('Selecionar Meses:', style={'font-weight': '700', 'font-size': '20px'}),
-        dcc.Checklist(
-            id='mes-comparacao-checklist',
-            options=[{'label': mes, 'value': mes} for mes in meses_completos],
-            value=['Junho', 'Julho', 'Agosto', 'Setembro'],  # Seleção inicial
-            inline=True,
-            labelStyle={'margin-right': '15px', 'font-size': '18px'}
-        )
-    ], style={'text-align': 'center', 'margin-top': '20px', 'margin-bottom': '20px'}),
+        dbc.Row([
+            dbc.Col([
+                html.Label('Selecionar Ano:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='comparacao-ano-dropdown',
+                    options=[{'label': ano, 'value': ano} for ano in anos_disponiveis],
+                    value=2024,  # Valor padrão
+                    clearable=False,
+                    style={'width': '100%'}
+                )
+            ], md=6),
+            dbc.Col([
+                html.Label('Selecionar Meses:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Checklist(
+                    id='comparacao-mes-checklist',
+                    options=[{'label': mes, 'value': mes} for mes in meses_completos],
+                    value=['Junho', 'Julho', 'Agosto', 'Setembro'],  # Seleção inicial
+                    inline=True,
+                    labelStyle={'margin-right': '15px', 'font-size': '18px'}
+                )
+            ], md=6),
+        ], justify='center', style={'margin-top': '20px', 'margin-bottom': '20px'}),
+    ], style={'text-align': 'center'}),
 
     # Caixa de comentários (aparece conforme seleção)
     html.Div([
@@ -1502,7 +1694,7 @@ public_page_2_layout = html.Div([
         )
     ]),
 
-    # Gráficos
+    # Gráficos de Comparação
     html.Div(id='graficos-metricas', style={'margin-bottom': '20px'}),
 
     # Explicação das Métricas com Caixa ao Redor
@@ -1557,22 +1749,35 @@ public_page_2_layout = html.Div([
           'min-height': '100vh'})
 
 
-# Página 3: Melhores Anúncios (CTR) (/page-3)
 public_page_3_layout = html.Div([
     html.H1("Melhores Anúncios (CTR)", className="text-center", 
             style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
 
-    # Selecionar Mês
+    # Seletores de Ano e Mês
     html.Div([
-        html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
-        dcc.Dropdown(
-            id='mes-melhores-anuncios-dropdown',
-            options=[{'label': mes, 'value': mes} for mes in ['Junho', 'Julho', 'Agosto', 'Setembro']],
-            value='Agosto',
-            clearable=False,
-            style={'width': '50%', 'margin': 'auto'}
-        )
-    ], style={'text-align': 'center', 'margin-top': '20px'}),
+        dbc.Row([
+            dbc.Col([
+                html.Label('Selecionar Ano:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='melhores-anuncios-ano-dropdown',
+                    options=[{'label': ano, 'value': ano} for ano in anos_disponiveis],
+                    value=2024,  # Valor padrão
+                    clearable=False,
+                    style={'width': '100%'}
+                )
+            ], md=6),
+            dbc.Col([
+                html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='mes-melhores-anuncios-dropdown',
+                    options=[{'label': mes, 'value': mes} for mes in meses_completos],
+                    value='Agosto',
+                    clearable=False,
+                    style={'width': '100%'}
+                )
+            ], md=6),
+        ], justify='center', style={'margin-top': '20px', 'margin-bottom': '20px'}),
+    ], style={'text-align': 'center'}),
 
     # Tabela de melhores anúncios
     html.Div(id='tabela-melhores-anuncios', style={'margin-top': '30px', 'overflowX': 'auto', 'font-size': '18px'}),
@@ -1589,48 +1794,57 @@ public_page_3_layout = html.Div([
           'background-color': secondary_color, 'padding': '20px', 
           'min-height': '100vh'})
 
-
 # Página 4: Cliques por Estado (/page-4)
 public_page_4_layout = html.Div([
-    html.H1("Cliques por Estado", className="text-center", 
-            style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
-
-    # Seletor de Mês
+    html.H1("Cliques por Estado", className="text-center",
+            style={'font-size': '36px', 'font-weight': '700', 'color': primary_color}),
+    
+    # Seletores de Ano e Mês
     html.Div([
-        html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
-        dcc.Dropdown(
-            id='mes-cliques-dropdown',
-            options=[{'label': mes, 'value': mes} for mes in meses_completos],
-            value='Agosto',
-            clearable=False,
-            style={'width': '50%', 'margin': 'auto'}
-        )
-    ], style={'text-align': 'center', 'margin-top': '20px'}),
-
-    # Gráfico de Pizza
-    html.Div([
-        dcc.Graph(
-            id='grafico-pizza-cliques'
-        )
-    ], style={'height': '600px', 'margin-top': '30px'}),
-
-    # Caixa de texto explicativo com borda
-    html.Div([
-        dbc.Alert(
-            id='comentario-cliques-box',
-            children="",
-            is_open=False,
-            color="info",
-            dismissable=True,
-            style={'font-size': '18px', 'margin-bottom': '20px', 'border': '1px solid #ced4da', 'padding': '15px'}
-        )
+        dbc.Row([
+            dbc.Col([
+                html.Label('Selecionar Ano:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='cliques-estado-ano-dropdown',
+                    options=[{'label': ano, 'value': ano} for ano in range(2021, 2026)],
+                    value=2024,  # Valor padrão
+                    clearable=False,
+                    style={'width': '100%'}
+                )
+            ], md=6),
+            dbc.Col([
+                html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='cliques-estado-mes-dropdown',
+                    options=[{'label': mes, 'value': mes} for mes in meses_completos],
+                    value='Agosto',  # Valor padrão
+                    clearable=False,
+                    style={'width': '100%'}
+                )
+            ], md=6),
+        ], justify='center', style={'margin-top': '20px', 'margin-bottom': '20px'}),
     ], style={'text-align': 'center'}),
-
-    # Botões de navegação
+    
+    # Componente para exibir o gráfico de cliques por estado
+    html.Div(id='cliques-estado-container', style={'margin-top': '20px'}),
+    
+    # Div para mensagens de erro
+    html.Div(id='cliques-estado-erro-msg', style={
+        'color': 'red',
+        'font-size': '16px',
+        'text-align': 'center',
+        'margin-top': '10px'
+    }),
+    
+    # Botões de navegação entre páginas
     botoes_navegacao(prev_href='/page-3', next_href='/page-5')
-], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif', 
-          'background-color': secondary_color, 'padding': '20px', 
-          'min-height': '100vh'})
+], style={
+    'color': '#343a40',
+    'font-family': 'Montserrat, sans-serif',
+    'background-color': secondary_color,
+    'padding': '20px',
+    'min-height': '100vh'
+})
 
 
 # Página 6: Valores Individuais de Cada Produto (/page-5)
@@ -1638,17 +1852,31 @@ public_page_5_layout = html.Div([
     html.H1("Valores Individuais de Cada Produto", className="text-center", 
             style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'}),
     
-    # Selecionar Produto
+    # Seletores de Produto e Ano
     html.Div([
-        html.Label('Selecionar Produto:', style={'font-weight': '700', 'font-size': '20px'}),
-        dcc.Dropdown(
-            id='produto-select-dropdown',
-            options=[{'label': produto, 'value': produto} for produto in df_produtos['Produto'].unique()],
-            value='Kit Plantio',  # Valor inicial
-            clearable=False,
-            style={'width': '50%', 'margin': 'auto'}
-        )
-    ], style={'text-align': 'center', 'margin-top': '20px'}),
+        dbc.Row([
+            dbc.Col([
+                html.Label('Selecionar Produto:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='produto-select-dropdown',
+                    options=[{'label': produto, 'value': produto} for produto in df_produtos['Produto'].unique()],
+                    value='Best Mix',  # Valor inicial
+                    clearable=False,
+                    style={'width': '100%'}
+                )
+            ], md=6),
+            dbc.Col([
+                html.Label('Selecionar Ano:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='produto-ano-dropdown',
+                    options=[{'label': ano, 'value': ano} for ano in range(2021, 2026)],
+                    value=2024,  # Valor padrão
+                    clearable=False,
+                    style={'width': '100%'}
+                )
+            ], md=6),
+        ], justify='center', style={'margin-top': '20px', 'margin-bottom': '20px'}),
+    ], style={'text-align': 'center'}),
     
     # Tabela de valores investidos, retornos e ROI
     html.Div([
@@ -1683,24 +1911,38 @@ public_page_6_layout = html.Div([
     html.H1("Funil de Vendas", className="text-center", 
             style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'}),
     
-    # Seletor de Mês
+    # Seletores de Ano e Mês
     html.Div([
-        html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
-        dcc.Dropdown(
-            id='seletor-mes-funil',
-            options=[{'label': mes, 'value': mes} for mes in meses_completos],
-            value='Agosto',  # Valor inicial selecionado
-            clearable=False,
-            style={'width': '50%', 'margin': 'auto'}
-        )
-    ], style={'text-align': 'center', 'margin-top': '20px'}),
+        dbc.Row([
+            dbc.Col([
+                html.Label('Selecionar Ano:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='funil-ano-dropdown',
+                    options=[{'label': ano, 'value': ano} for ano in range(2021, 2026)],
+                    value=2024,  # Valor padrão
+                    clearable=False,
+                    style={'width': '100%'}
+                )
+            ], md=6),
+            dbc.Col([
+                html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='funil-mes-dropdown',
+                    options=[{'label': mes, 'value': mes} for mes in meses_completos],
+                    value='Agosto',  # Valor padrão
+                    clearable=False,
+                    style={'width': '100%'}
+                )
+            ], md=6),
+        ], justify='center', style={'margin-top': '20px', 'margin-bottom': '20px'}),
+    ], style={'text-align': 'center'}),
     
-    # Gráfico de Funil de Vendas em Barras (Horizontal) que será atualizado pelo callback
+    # Gráfico de Funil de Vendas
     html.Div([
         dcc.Graph(id='grafico-funil')
     ], style={'height': '600px', 'margin-bottom': '20px'}),
     
-    # Taxa de Conversão destacada para o mês selecionado (inicialmente agosto)
+    # Taxa de Conversão destacada para o mês selecionado
     html.Div(id='taxa-conversao', style={'text-align': 'center', 'font-size': '24px', 'margin-top': '10px'}),
     
     # Caixa de texto explicativo
@@ -1722,29 +1964,72 @@ public_page_6_layout = html.Div([
     
     # Botões de navegação
     botoes_navegacao(prev_href='/page-5', next_href='/page-7')
-], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif', 
-          'background-color': secondary_color, 'padding': '20px', 
-          'min-height': '100vh'})
+], style={
+    'color': '#343a40',
+    'font-family': 'Montserrat, sans-serif',
+    'background-color': secondary_color,
+    'padding': '20px',
+    'min-height': '100vh'
+})
 
 # Página 8: Explicação de ROI e ROAS (/page-7)
 public_page_7_layout = html.Div([
     html.H1("Explicação do ROI e ROAS", className="text-center", 
             style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'}),
     
-    # Duas Tabelas Separadas
+    # Seletores de Ano e Mês
+    html.Div([
+        dbc.Row([
+            dbc.Col([
+                html.Label('Selecionar Ano:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='roi-roas-ano-dropdown',
+                    options=[{'label': ano, 'value': ano} for ano in range(2021, 2026)],
+                    value=2024,  # Valor padrão
+                    clearable=False,
+                    style={'width': '100%'}
+                )
+            ], md=6),
+            dbc.Col([
+                html.Label('Selecionar Mês:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='roi-roas-mes-dropdown',
+                    options=[{'label': mes, 'value': mes} for mes in meses_completos],
+                    value='Setembro',  # Valor padrão
+                    clearable=False,
+                    style={'width': '100%'}
+                )
+            ], md=6),
+        ], justify='center', style={'margin-top': '20px', 'margin-bottom': '20px'}),
+    ], style={'text-align': 'center'}),
+    
+    # Tabelas de ROI Interno e Externo com Editores de Texto
     dbc.Row([
         dbc.Col([
             dbc.Table([
                 html.Thead(html.Tr([html.Th("ROI Externo")])),
                 html.Tbody([
                     html.Tr([html.Td("Marketing Digital")]),
-                    html.Tr([html.Td("Investimento: R$ 54.170,23")]),
-                    html.Tr([html.Td("Retorno gerado: R$ 7.515.208,52")]),
-                    html.Tr([html.Td("ROI = 13.771,37%")]),
-                    html.Tr([html.Td("ROAS: R$ 138,74")]),
-                    html.Tr([html.Td(
-                        "Isso significa que para cada R$ 1 investido, gerou R$ 138,74 em receita, e o retorno sobre o investimento total foi de 13.771,37%."
-                    )]),
+                    html.Tr([html.Td([
+                        html.Label('Investimento:', style={'font-weight': '700'}),
+                        dbc.Input(id='edit-investimento-externo', type='text', value="R$ 54.170,23")
+                    ])]),
+                    html.Tr([html.Td([
+                        html.Label('Retorno gerado:', style={'font-weight': '700'}),
+                        dbc.Input(id='edit-retorno-externo', type='text', value="R$ 7.515.208,52")
+                    ])]),
+                    html.Tr([html.Td([
+                        html.Label('ROI:', style={'font-weight': '700'}),
+                        dbc.Input(id='edit-roi-externo', type='text', value="13.771,37%")
+                    ])]),
+                    html.Tr([html.Td([
+                        html.Label('ROAS:', style={'font-weight': '700'}),
+                        dbc.Input(id='edit-roas-externo', type='text', value="R$ 138,74")
+                    ])]),
+                    html.Tr([html.Td([
+                        html.Label('Descrição:', style={'font-weight': '700'}),
+                        dbc.Textarea(id='edit-descricao-externo', value="Isso significa que para cada R$ 1 investido, gerou R$ 138,74 em receita, e o retorno sobre o investimento total foi de 13.771,37%.", style={'width': '100%'})
+                    ])]),
                 ])
             ], bordered=True, hover=True, responsive=True, striped=True, style={
                 'background-color': '#FFFFFF',
@@ -1758,13 +2043,26 @@ public_page_7_layout = html.Div([
                 html.Thead(html.Tr([html.Th("ROI Interno")])),
                 html.Tbody([
                     html.Tr([html.Td("Marketing Digital")]),
-                    html.Tr([html.Td("Faturamento interno (receita): R$ 2.497.224,63 (Kit e Máquinas)")]),
-                    html.Tr([html.Td("Investimento total (custo): R$ 54.170,23")]),
-                    html.Tr([html.Td("ROI: 4.508,98%")]),
-                    html.Tr([html.Td("ROAS: R$ 46,09")]),
-                    html.Tr([html.Td(
-                        "Isso significa que para cada R$ 1 investido, você gerou R$ 46,09 em receita internamente, com um retorno sobre o investimento de 4.508,98%."
-                    )]),
+                    html.Tr([html.Td([
+                        html.Label('Faturamento interno (receita):', style={'font-weight': '700'}),
+                        dbc.Input(id='edit-faturamento-interno', type='text', value="R$ 2.497.224,63 (Kit e Máquinas)")
+                    ])]),
+                    html.Tr([html.Td([
+                        html.Label('Investimento total (custo):', style={'font-weight': '700'}),
+                        dbc.Input(id='edit-investimento-interno', type='text', value="R$ 54.170,23")
+                    ])]),
+                    html.Tr([html.Td([
+                        html.Label('ROI:', style={'font-weight': '700'}),
+                        dbc.Input(id='edit-roi-interno', type='text', value="4.508,98%")
+                    ])]),
+                    html.Tr([html.Td([
+                        html.Label('ROAS:', style={'font-weight': '700'}),
+                        dbc.Input(id='edit-roas-interno', type='text', value="R$ 46,09")
+                    ])]),
+                    html.Tr([html.Td([
+                        html.Label('Descrição:', style={'font-weight': '700'}),
+                        dbc.Textarea(id='edit-descricao-interno', value="Isso significa que para cada R$ 1 investido, você gerou R$ 46,09 em receita internamente, com um retorno sobre o investimento de 4.508,98%.", style={'width': '100%'})
+                    ])]),
                 ])
             ], bordered=True, hover=True, responsive=True, striped=True, style={
                 'background-color': '#FFFFFF',
@@ -1775,60 +2073,74 @@ public_page_7_layout = html.Div([
         ], md=6)
     ], justify='center'),
     
-    # Caixa de texto adicional no centro
+    # Botões de Salvar Alterações no Modo Admin
     html.Div([
-        html.Div([
-            html.P(
-                "Comentários adicionais sobre ROI e ROAS podem ser adicionados aqui para fornecer uma análise mais detalhada.",
-                style={'font-size': '18px', 'text-align': 'center'}
-            )
-        ], style={
-            'border': '1px solid #ced4da',
-            'padding': '20px',
-            'border-radius': '5px',
-            'background-color': '#FFFFFF',
-            'max-width': '800px',
-            'margin': '20px auto'
-        })
-    ]),
+        dbc.Button("Salvar Alterações", id='salvar-textos-roi-roas', color='primary', className='mr-2')
+    ], style={'text-align': 'center', 'margin-top': '20px'}),
+    
+    # Feedback após salvar
+    html.Div(id='feedback-roi-roas', style={'text-align': 'center', 'margin-top': '10px'}),
     
     # Botões de navegação
-    botoes_navegacao(prev_href='/page-6', next_href='/page-8')  # Próximo slide será page-8
+    botoes_navegacao(prev_href='/page-6', next_href='/page-8')
 ], style={'color': '#343a40', 'font-family': 'Montserrat, sans-serif', 
           'background-color': secondary_color, 'padding': '20px', 
           'min-height': '100vh'})
 
 # Página 8: Média dos Totais de Desempenho de Facebook e Google Ads com Comparação de Métricas (/page-8)
+# Página 8: Média dos Totais de Desempenho de Facebook e Google Ads com Comparação de Métricas e Tendência
 public_page_8_layout = html.Div([
     html.H1("Comparação de Métricas de Desempenho de Facebook e Google Ads", className="text-center", 
             style={'font-size': '36px', 'color': primary_color, 'font-weight': '700'}),
     
-    # Seletor de Métricas para Comparação
+    # Seletores de Métricas e Anos para Comparação
     html.Div([
-        html.Label('Selecionar Métricas para Comparação:', style={'font-weight': '700', 'font-size': '20px'}),
-        dcc.Dropdown(
-            id='seletor-metricas-comparacao',
-            options=[
-                {'label': 'Impressões', 'value': 'Impressões'},
-                {'label': 'Cliques no link', 'value': 'Cliques no link'},
-                {'label': 'Resultados', 'value': 'Resultados'},
-                {'label': 'Orçamento (R$)', 'value': 'Orçamento (R$)'},
-                {'label': 'CTR (%)', 'value': 'CTR (%)'},
-                {'label': 'CPL (R$)', 'value': 'CPL (R$)'}
-            ],
-            value=['Impressões', 'Cliques no link'],  # Seleção inicial de duas métricas
-            multi=True,
-            style={'width': '60%', 'margin': 'auto'}
-        )
+        dbc.Row([
+            dbc.Col([
+                html.Label('Selecionar Métricas para Comparação:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='seletor-metricas-comparacao',
+                    options=[
+                        {'label': 'Impressões', 'value': 'Impressões'},
+                        {'label': 'Cliques no link', 'value': 'Cliques no link'},
+                        {'label': 'Resultados', 'value': 'Resultados'},
+                        {'label': 'Orçamento (R$)', 'value': 'Orçamento (R$)'},
+                        {'label': 'CTR (%)', 'value': 'CTR (%)'},
+                        {'label': 'CPL (R$)', 'value': 'CPL (R$)'}
+                    ],
+                    value=['Impressões', 'Cliques no link'],  # Seleção inicial de duas métricas
+                    multi=True,
+                    style={'width': '90%', 'margin': 'auto'}
+                )
+            ], md=6),
+            dbc.Col([
+                html.Label('Selecionar Anos para Comparação:', style={'font-weight': '700', 'font-size': '20px'}),
+                dcc.Dropdown(
+                    id='seletor-anos-comparacao',
+                    options=[{'label': ano, 'value': ano} for ano in range(2021, 2026)],
+                    value=[2024],  # Seleção inicial
+                    multi=True,
+                    style={'width': '90%', 'margin': 'auto'}
+                )
+            ], md=6),
+        ], justify='center')
     ], style={'text-align': 'center', 'margin-top': '20px', 'margin-bottom': '20px'}),
     
     # Contêiner para Gráficos Comparativos Dinâmicos
     html.Div([
         # Gráficos serão inseridos aqui dinamicamente pelo callback
-    ], id='grafico-comparacao-container', style={'margin-bottom': '20px'}),
+        html.Div(id='grafico-comparacao-container', style={'margin-bottom': '20px'}),
+    ]),
+    
+    # Contêiner para Análise de Tendência
+    html.Div([
+        html.H3("Análise de Tendência das Métricas", className="text-center", 
+                style={'font-size': '24px', 'color': primary_color, 'font-weight': '700'}),
+        dcc.Graph(id='trend-analysis-graph', style={'margin-top': '20px'})
+    ], style={'margin-top': '40px', 'padding': '20px', 'background-color': '#FFFFFF', 'border-radius': '5px'}),
     
     # Botões de Navegação
-     botoes_navegacao(prev_href='/page-7', next_href='/page-9')
+    botoes_navegacao(prev_href='/page-7', next_href='/page-9')
 ], style={
     'color': '#343a40', 
     'font-family': 'Montserrat, sans-serif', 
@@ -1836,6 +2148,7 @@ public_page_8_layout = html.Div([
     'padding': '20px', 
     'min-height': '100vh'
 })
+
 public_page_9_layout = html.Div([
     html.H1("Comercial 1", className="text-center",
             style={'color': primary_color, 'font-size': '36px', 'font-weight': '700'}),
@@ -2007,6 +2320,141 @@ public_page_12_layout = html.Div([
     'min-height': '100vh'
 })
 @app.callback(
+    [Output('comparacao-metricas-container', 'children'),
+     Output('comparacao-erro-msg', 'children')],
+    [Input('comparacao-ano-dropdown', 'value'),
+     Input('comparacao-mes-dropdown', 'value')]
+)
+def atualizar_comparacao_metricas(ano_selecionado, mes_selecionado):
+    if not (ano_selecionado and mes_selecionado):
+        return [], "Por favor, selecione o ano e o mês para visualizar as métricas."
+
+    try:
+        # Buscar os dados de desempenho do Firebase
+        dados_desempenho = db.child("desempenho").child(str(ano_selecionado)).child(mes_selecionado).get().val()
+        
+        if not dados_desempenho:
+            return [], f"Nenhum dado encontrado para {mes_selecionado} de {ano_selecionado}."
+
+        # Processar os dados para exibir
+        plataformas = ['Facebook Ads', 'Google Ads']
+        metricas = ['Impressoes', 'Cliques_no_link', 'Resultados', 'Orcamento', 'CTR', 'CPL']
+
+        # Criar uma tabela comparativa
+        tabela_comparativa = dash_table.DataTable(
+            columns=[{'name': 'Métrica', 'id': 'Métrica'}] + [{'name': plataforma, 'id': plataforma} for plataforma in plataformas],
+            data=[
+                {
+                    'Métrica': 'Impressões',
+                    'Facebook Ads': dados_desempenho.get('Facebook Ads', {}).get('Impressoes', 0),
+                    'Google Ads': dados_desempenho.get('Google Ads', {}).get('Impressoes', 0)
+                },
+                {
+                    'Métrica': 'Cliques no Link',
+                    'Facebook Ads': dados_desempenho.get('Facebook Ads', {}).get('Cliques_no_link', 0),
+                    'Google Ads': dados_desempenho.get('Google Ads', {}).get('Cliques_no_link', 0)
+                },
+                {
+                    'Métrica': 'Resultados',
+                    'Facebook Ads': dados_desempenho.get('Facebook Ads', {}).get('Resultados', 0),
+                    'Google Ads': dados_desempenho.get('Google Ads', {}).get('Resultados', 0)
+                },
+                {
+                    'Métrica': 'Orçamento (R$)',
+                    'Facebook Ads': f"R$ {dados_desempenho.get('Facebook Ads', {}).get('Orcamento', 0):,.2f}",
+                    'Google Ads': f"R$ {dados_desempenho.get('Google Ads', {}).get('Orcamento', 0):,.2f}"
+                },
+                {
+                    'Métrica': 'CTR (%)',
+                    'Facebook Ads': f"{dados_desempenho.get('Facebook Ads', {}).get('CTR', 0)}%",
+                    'Google Ads': f"{dados_desempenho.get('Google Ads', {}).get('CTR', 0)}%"
+                },
+                {
+                    'Métrica': 'CPL (R$)',
+                    'Facebook Ads': f"R$ {dados_desempenho.get('Facebook Ads', {}).get('CPL', 0):,.2f}",
+                    'Google Ads': f"R$ {dados_desempenho.get('Google Ads', {}).get('CPL', 0):,.2f}"
+                }
+            ],
+            style_table={'margin': 'auto', 'width': '80%'},
+            style_cell={
+                'textAlign': 'center',
+                'padding': '8px',
+                'font-family': 'Montserrat, sans-serif',
+                'fontSize': '14px',
+                'border': '1px solid #ddd'
+            },
+            style_header={
+                'backgroundColor': '#28a745',
+                'fontWeight': 'bold',
+                'color': 'white',
+                'fontSize': '16px'
+            },
+            style_data={'backgroundColor': '#f9f9f9'},
+            style_data_conditional=[
+                {'if': {'row_index': 'odd'}, 'backgroundColor': '#e9e9e9'}
+            ]
+        )
+
+        return tabela_comparativa, ""
+
+    except Exception as e:
+        logging.error(f"Erro ao atualizar comparacao_metricas: {e}")
+        return [], f"Erro ao carregar os dados: {str(e)}"
+
+
+@app.callback(
+    [Output('feedback-roi-roas', 'children')],
+    [Input('salvar-textos-roi-roas', 'n_clicks')],
+    [
+        State('roi-roas-ano-dropdown', 'value'),
+        State('roi-roas-mes-dropdown', 'value'),
+        State('edit-investimento-externo', 'value'),
+        State('edit-retorno-externo', 'value'),
+        State('edit-roi-externo', 'value'),
+        State('edit-roas-externo', 'value'),
+        State('edit-descricao-externo', 'value'),
+        State('edit-faturamento-interno', 'value'),
+        State('edit-investimento-interno', 'value'),
+        State('edit-roi-interno', 'value'),
+        State('edit-roas-interno', 'value'),
+        State('edit-descricao-interno', 'value')
+    ]
+)
+def salvar_textos_roi_roas(n_clicks, ano, mes,
+                           investimento_externo, retorno_externo, roi_externo, roas_externo, descricao_externo,
+                           faturamento_interno, investimento_interno, roi_interno, roas_interno, descricao_interno):
+    if n_clicks and n_clicks > 0:
+        if not (ano and mes):
+            return [dbc.Alert("Por favor, selecione o ano e o mês.", color="danger")]
+        try:
+            # Estrutura para salvar no Firebase
+            dados_roi_roas = {
+                'ROI Externo': {
+                    'Investimento': investimento_externo,
+                    'Retorno gerado': retorno_externo,
+                    'ROI': roi_externo,
+                    'ROAS': roas_externo,
+                    'Descrição': descricao_externo
+                },
+                'ROI Interno': {
+                    'Faturamento interno (receita)': faturamento_interno,
+                    'Investimento total (custo)': investimento_interno,
+                    'ROI': roi_interno,
+                    'ROAS': roas_interno,
+                    'Descrição': descricao_interno
+                }
+            }
+            
+            # Salvar os dados no Firebase
+            db.child("roi_roas").child(str(ano)).child(mes).set(dados_roi_roas)
+            
+            return [dbc.Alert("Textos atualizados com sucesso!", color="success")]
+        except Exception as e:
+            logging.error(f"Erro ao salvar textos de ROI e ROAS: {e}")
+            return [dbc.Alert(f"Erro ao salvar os dados: {str(e)}", color="danger")]
+    
+    return [""]
+@app.callback(
     Output('vendas-pagina-6', 'children'),  # Componente que exibirá as vendas
     [Input('mes-pagina-6-dropdown', 'value')]  # Dropdown para selecionar o mês
 )
@@ -2080,125 +2528,36 @@ def atualizar_imagem_pagina_12(mes_selecionado):
 
 
 @app.callback(
-    Output('grafico-comparacao-container', 'children'),
-    [Input('seletor-metricas-comparacao', 'value')]
+    [Output('grafico-comparacao-container', 'children'),
+     Output('trend-analysis-graph', 'figure')],
+    [Input('seletor-metricas-comparacao', 'value'),
+     Input('seletor-anos-comparacao', 'value')]
 )
-def atualizar_graficos_comparacao(metricas_selecionadas):
-    # Lista completa de meses de janeiro a dezembro
-    ordem_meses = [
-        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-    ]
+def atualizar_graficos_comparacao_e_tendencia(metricas_selecionadas, anos_selecionados):
+    if not metricas_selecionadas or not anos_selecionados:
+        return [dbc.Alert("⚠️ Por favor, selecione pelo menos uma métrica e um ano para comparação.", color="warning")], {}
     
-    # Verifica se há métricas selecionadas
-    if not metricas_selecionadas:
-        # Retornar mensagem solicitando seleção de métricas
-        return html.Div("Selecione pelo menos uma métrica para comparação.", style={'text-align': 'center', 'font-size': '20px', 'color': 'red'})
-    
-    # Função para buscar dados do Firebase para uma métrica específica
-    def get_dados_metricas(metrica):
-        try:
-            # Mapeamento da métrica para a chave no Firebase
-            chave_firebase = mapa_metricas_firebase.get(metrica)
-            if not chave_firebase:
-                logging.warning(f"Métrica '{metrica}' não mapeada no Firebase.")
-                return pd.DataFrame()
-            
-            # Acessar a estrutura 'desempenho/{mes}/{plataforma}/{chave_firebase}' no Firebase
-            dados_desempenho = db.child("desempenho").get().val()
-            
-            if not dados_desempenho:
-                logging.warning("Nenhum dado encontrado em 'desempenho'.")
-                return pd.DataFrame()
-            
-            # Lista para armazenar os dados
-            dados_list = []
-            
-            for mes in ordem_meses:
-                plataformas = dados_desempenho.get(mes, {})
-                for plataforma in ['Facebook Ads', 'Google Ads']:
-                    metrics = plataformas.get(plataforma, {})
-                    valor = metrics.get(chave_firebase, 0)
-                    if valor is None:
-                        valor = 0
-                    # Assegura que o valor é numérico
-                    try:
-                        valor = float(valor)
-                    except (ValueError, TypeError):
-                        valor = 0.0
-                    dados_list.append({
-                        'Mês': mes,
-                        'Plataforma': plataforma,
-                        'Valor': valor
-                    })
-            
-            # Converter para DataFrame
-            df_metricas = pd.DataFrame(dados_list)
-            
-            return df_metricas
-        
-        except Exception as e:
-            logging.error(f"Erro ao buscar dados para a métrica '{metrica}': {e}")
-            return pd.DataFrame()
-    
-    # Lista para armazenar os componentes dos gráficos
-    componentes_graficos = []
-    
+    graficos = []
     for metrica in metricas_selecionadas:
-        df = get_dados_metricas(metrica)
-        
-        if df.empty:
-            # Adicionar mensagem se não houver dados para a métrica
-            componentes_graficos.append(
-                html.Div(f"Nenhum dado disponível para a métrica: {metrica}", style={'text-align': 'center', 'color': 'orange', 'font-size': '18px', 'margin-bottom': '20px'})
+        fig = criar_grafico_media_totais(metrica, anos_selecionados)
+        graficos.append(
+            dcc.Graph(
+                figure=fig,
+                style={'width': '80%', 'margin': 'auto'}
             )
-            continue
-        
-        # Criar o gráfico de barras para a métrica
-        fig = px.bar(
-            df,
-            x='Mês',
-            y='Valor',
-            color='Plataforma',
-            barmode='group',
-            title=f"{metrica} - Comparação de Todos os Meses",
-            labels={'Valor': metrica, 'Mês': 'Mês'},
-            height=400
-        )
-        
-        # Atualizar layout do gráfico
-        fig.update_layout(
-            plot_bgcolor=secondary_color,
-            paper_bgcolor=secondary_color,
-            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
-            title_x=0.5
-        )
-        
-        # Adicionar formatação aos valores das barras
-        if "R$" in metrica:
-            text_template = 'R$ %{y:,.2f}'
-        elif "%" in metrica:
-            text_template = '%{y:.2f}%'
-        else:
-            text_template = '%{y:,}'  # Formato para números inteiros (como Impressões)
-            df['Valor'] = df['Valor'].astype(int)
-        
-        fig.update_traces(texttemplate=text_template, textposition='outside')
-        
-        # Adicionar o gráfico ao contêiner de gráficos
-        componentes_graficos.append(
-            html.Div([
-                dcc.Graph(figure=fig)
-            ], style={'margin-bottom': '40px'})
         )
     
-    return componentes_graficos
-def get_dados_metricas(metrica):
+    # Gerar o gráfico de tendência (usar a primeira métrica selecionada)
+    tendencia_fig = criar_grafico_tendencia(metricas_selecionadas[0], anos_selecionados)
+    
+    return graficos, tendencia_fig
+def get_dados_metricas(metrica, ano):
     """
     Busca os dados da métrica especificada no Firebase e retorna um DataFrame.
     
     Parâmetros:
     - metrica (str): Nome da métrica a ser buscada.
+    - ano (int): Ano selecionado.
     
     Retorna:
     - pd.DataFrame: DataFrame contendo os dados da métrica.
@@ -2209,24 +2568,22 @@ def get_dados_metricas(metrica):
         if not chave_firebase:
             logging.warning(f"Métrica '{metrica}' não mapeada no Firebase.")
             return pd.DataFrame()
-        
-        # Acessar a estrutura 'desempenho/{mes}/{plataforma}/{chave_firebase}' no Firebase
-        dados_desempenho = db.child("desempenho").get().val()
-        logging.info(f"Dados de desempenho para a métrica '{metrica}': {dados_desempenho}")
-        
+
+        # Acessar a estrutura 'desempenho/{ano}/{mes}/{plataforma}/{chave_firebase}' no Firebase
+        dados_desempenho = db.child("desempenho").child(str(ano)).get().val()
+
         if not dados_desempenho:
-            logging.warning("Nenhum dado encontrado em 'desempenho'.")
+            logging.warning(f"Nenhum dado encontrado em 'desempenho' para o ano {ano}.")
             return pd.DataFrame()
-        
+
         # Lista para armazenar os dados
         dados_list = []
-        
+
         for mes in ordem_meses:
             plataformas = dados_desempenho.get(mes, {})
             for plataforma in ['Facebook Ads', 'Google Ads']:
                 metrics = plataformas.get(plataforma, {})
                 valor = metrics.get(chave_firebase, 0)
-                logging.info(f"Mês: {mes}, Plataforma: {plataforma}, Métrica: {metrica}, Valor: {valor}")
                 if valor is None:
                     valor = 0
                 # Assegura que o valor é numérico
@@ -2239,115 +2596,16 @@ def get_dados_metricas(metrica):
                     'Plataforma': plataforma,
                     'Valor': valor
                 })
-        
+
         # Converter para DataFrame
         df_metricas = pd.DataFrame(dados_list)
-        logging.info(f"DataFrame para a métrica '{metrica}':\n{df_metricas}")
-        
-        return df_metricas
-    
-    except Exception as e:
-        logging.error(f"Erro ao buscar dados para a métrica '{metrica}': {e}")
-        return pd.DataFrame()
-@app.callback(
-    Output('grafico-comparacao-metricas', 'figure'),
-    [Input('seletor-metricas-comparacao', 'value')]
-)
-def atualizar_grafico_comparacao(metricas_selecionadas):
-    if not metricas_selecionadas:
-        # Retornar gráfico vazio com mensagem
-        fig = px.bar(title="Selecione pelo menos uma métrica para comparação.")
-        fig.update_layout(
-            plot_bgcolor=secondary_color,
-            paper_bgcolor=secondary_color,
-            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
-            title_x=0.5
-        )
-        return fig
-    
-    # Função para buscar dados do Firebase para uma métrica específica
-    def get_dados_metricas(metrica):
-        try:
-            # Mapear a métrica para a chave do Firebase
-            chave_firebase = mapa_metricas_firebase.get(metrica)
-            if not chave_firebase:
-                logging.warning(f"Métrica '{metrica}' não mapeada no Firebase.")
-                return pd.DataFrame()
-            
-            # Acessar a estrutura 'desempenho/{mes}/{plataforma}/{chave_firebase}' no Firebase
-            dados_desempenho = db.child("desempenho").get().val()
-            
-            if not dados_desempenho:
-                logging.warning("Nenhum dado encontrado em 'desempenho'.")
-                return pd.DataFrame()
-            
-            # Lista para armazenar os dados
-            dados_list = []
-            
-            for mes, plataformas in dados_desempenho.items():
-                for plataforma, metrics in plataformas.items():
-                    valor = metrics.get(chave_firebase, 0)
-                    if valor is None:
-                        valor = 0
-                    dados_list.append({
-                        'Mês': mes,
-                        'Plataforma': plataforma,
-                        'Valor': valor
-                    })
-            
-            # Converter para DataFrame
-            df_metricas = pd.DataFrame(dados_list)
-            
-            return df_metricas
-        
-        except Exception as e:
-            logging.error(f"Erro ao buscar dados para a métrica '{metrica}': {e}")
-            return pd.DataFrame()
-    
-    # Criar o DataFrame para todas as métricas selecionadas
-    dfs = []
-    for metrica in metricas_selecionadas:
-        df = get_dados_metricas(metrica)
-        if not df.empty:
-            df['Métrica'] = metrica
-            dfs.append(df)
-    
-    if not dfs:
-        # Nenhum dado disponível para as métricas selecionadas
-        fig = px.bar(title="Dados insuficientes para as métricas selecionadas.")
-        fig.update_layout(
-            plot_bgcolor=secondary_color,
-            paper_bgcolor=secondary_color,
-            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
-            title_x=0.5
-        )
-        return fig
-    
-    # Concatenar todos os DataFrames
-    df_comparacao = pd.concat(dfs, ignore_index=True)
-    
-    # Plotar o gráfico com múltiplas métricas
-    fig = px.bar(
-        df_comparacao,
-        x='Mês',
-        y='Valor',
-        color='Plataforma',
-        facet_col='Métrica',  # Cada métrica em um facet separado
-        barmode='group',
-        title="Comparação de Métricas Selecionadas",
-        labels={'Valor': 'Valor', 'Mês': 'Mês'},
-        height=400 * len(metricas_selecionadas)  # Ajustar a altura com base no número de métricas
-    )
-    fig.update_layout(
-        plot_bgcolor=secondary_color,
-        paper_bgcolor=secondary_color,
-        font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
-        title_x=0.5
-    )
-    fig.update_traces(texttemplate='%{y:,}', textposition='outside')
-    
-    return fig
 
+        return df_metricas
+
+    except Exception as e:
+        logging.error(f"Erro ao buscar dados para a métrica '{metrica}' no ano {ano}: {e}")
+        return pd.DataFrame()
+  
 @app.callback(
     Output('editar-cliques-feedback', 'children'),
     [Input('salvar-cliques-estado', 'n_clicks')],
@@ -2440,13 +2698,13 @@ app.layout = html.Div([
 # Callback para carregar e editar os melhores anúncios
 @app.callback(
     [Output('tabela-edicao-anuncios', 'data'),
-     Output('input-link-imagem', 'value'),
+     Output('admin-link-imagem', 'value'),
      Output('imagem-preview-anuncios', 'src'),
      Output('feedback-anuncios', 'children')],
-    [Input('mes-anuncio-dropdown', 'value'),
-     Input('btn-salvar-anuncios', 'n_clicks')],
+    [Input('admin-anuncio-mes', 'value'),
+     Input('admin-btn-salvar-anuncios', 'n_clicks')],
     [State('tabela-edicao-anuncios', 'data'),
-     State('input-link-imagem', 'value')]
+     State('admin-link-imagem', 'value')]
 )
 
 def carregar_editar_anuncios(mes_selecionado, n_clicks, anuncios_atualizados, link_imagem):
@@ -2618,6 +2876,49 @@ def validar_chaves_e_valores(dados):
 
     return dados_corrigidos
 
+
+@app.callback(
+    [Output('admin-feedback-produto', 'children'),
+     Output('admin-valor-investido', 'value'),
+     Output('admin-retorno-produto', 'value')],
+    [Input('admin-btn-salvar-produto', 'n_clicks')],
+    [State('admin-produto-select', 'value'),
+     State('admin-produto-ano', 'value'),
+     State('admin-produto-mes', 'value'),
+     State('admin-valor-investido', 'value'),
+     State('admin-retorno-produto', 'value')]
+)
+def salvar_ou_carregar_produto(n_clicks, produto, ano, mes, valor_investido, retorno):
+    if n_clicks and n_clicks > 0:
+        # Validar os dados de entrada
+        if not all([produto, ano, mes, valor_investido, retorno]):
+            return [dbc.Alert("⚠️ Por favor, preencha todos os campos.", color="danger")], valor_investido, retorno
+        try:
+            # Atualizar os dados no Firebase
+            db.child("produtos").child(produto).child(str(ano)).child(mes).update({
+                'Valor Investido_R': float(valor_investido),
+                'Retorno_R': float(retorno)
+            })
+            feedback = dbc.Alert("Dados salvos com sucesso!", color="success")
+            return [feedback], valor_investido, retorno
+        except Exception as e:
+            logging.error(f"Erro ao salvar dados do produto: {e}")
+            return [dbc.Alert(f"Erro ao salvar os dados: {str(e)}", color="danger")], valor_investido, retorno
+    else:
+        # Carregar os dados existentes quando os seletores são alterados
+        try:
+            produto_selecionado = dash.callback_context.inputs_list[0]['id'] == 'admin-produto-select'
+            dados_produto = db.child("produtos").child(produto).child(str(ano)).child(mes).get().val()
+            if dados_produto:
+                valor_investido = dados_produto.get('Valor Investido_R', 0.0)
+                retorno = dados_produto.get('Retorno_R', 0.0)
+                feedback = dbc.Alert(f"Dados carregados para {produto} em {mes}/{ano}.", color="info")
+                return [feedback], valor_investido, retorno
+            else:
+                return [dbc.Alert(f"⚠️ Nenhum dado encontrado para {produto} em {mes}/{ano}.", color="warning")], None, None
+        except Exception as e:
+            logging.error(f"Erro ao carregar dados do produto: {e}")
+            return [dbc.Alert(f"Erro ao carregar os dados: {str(e)}", color="danger")], None, None
 # Callback para carregar ou salvar dados no painel de administração
 @app.callback(
     [Output('editar-feedback', 'children'),
@@ -2629,7 +2930,8 @@ def validar_chaves_e_valores(dados):
      Output('edit-resultados', 'value')],
     [Input('salvar-desempenho', 'n_clicks'),
      Input('edit-mes', 'value'),
-     Input('edit-plataforma', 'value')],
+     Input('edit-plataforma', 'value'),
+     Input('edit-ano', 'value')],
     [State('edit-impressao', 'value'),
      State('edit-clique', 'value'),
      State('edit-orcamento', 'value'),
@@ -2637,33 +2939,30 @@ def validar_chaves_e_valores(dados):
      State('edit-cpl', 'value'),
      State('edit-resultados', 'value')]
 )
-def salvar_ou_carregar_dados(n_clicks, mes, plataforma, impressao, clique, orcamento, ctr, cpl, resultados):
+def salvar_ou_carregar_dados(n_clicks, mes, plataforma, ano, impressao, clique, orcamento, ctr, cpl, resultados):
     # Obter o contexto do callback
     ctx = dash.callback_context
     trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
 
-    # Caso o usuário tenha selecionado um mês ou plataforma, carregar os dados existentes
-    if trigger_id in ['edit-mes', 'edit-plataforma'] and mes and plataforma:
+    # Caso o usuário tenha selecionado um mês, plataforma e ano, carregar os dados existentes
+    if trigger_id in ['edit-mes', 'edit-plataforma', 'edit-ano'] and mes and plataforma and ano:
         try:
-            # Chama a função para carregar dados do Firebase
-            dados_carregados = carregar_dados_existentes(mes, plataforma)
-            
-            # Se os dados foram carregados com sucesso, retornar os valores para os campos
+            # Carregar dados existentes do Firebase
+            dados_carregados = carregar_dados_existentes(ano, mes, plataforma)
+
             if dados_carregados:
-                return [dbc.Alert(f"Dados carregados para {mes} - {plataforma}.", color="info")] + list(dados_carregados)
+                return [dbc.Alert(f"Dados carregados para {mes} de {ano} - {plataforma}.", color="info")] + list(dados_carregados)
             else:
-                # Caso não haja dados, retornar alert e valores nulos
-                return [dbc.Alert(f"Nenhum dado encontrado para {mes} - {plataforma}.", color="warning")] + [None] * 6
+                return [dbc.Alert(f"Nenhum dado encontrado para {mes} de {ano} - {plataforma}.", color="warning")] + [None] * 6
 
         except Exception as e:
-            # Captura de exceção e retorno com mensagem de erro
             return [dbc.Alert(f"Erro ao carregar dados: {str(e)}", color="danger")] + [None] * 6
 
     # Caso o botão de salvar tenha sido pressionado
     elif trigger_id == 'salvar-desempenho' and n_clicks > 0:
         try:
             # Validar se todos os campos foram preenchidos corretamente
-            if not all([impressao, clique, orcamento, ctr, cpl, resultados]):
+            if not all([impressao, clique, orcamento, ctr, cpl, resultados, ano, mes, plataforma]):
                 return [dbc.Alert("Todos os campos devem ser preenchidos.", color="danger")] + [impressao, clique, orcamento, ctr, cpl, resultados]
 
             # Preparar os dados a serem atualizados no Firebase
@@ -2677,7 +2976,7 @@ def salvar_ou_carregar_dados(n_clicks, mes, plataforma, impressao, clique, orcam
             }
 
             # Atualizar os dados no Firebase
-            db.child("desempenho").child(mes).child(plataforma).update(dados_atualizados)
+            db.child("desempenho").child(str(ano)).child(mes).child(plataforma).update(dados_atualizados)
 
             return [dbc.Alert("Dados atualizados com sucesso!", color="success")] + [impressao, clique, orcamento, ctr, cpl, resultados]
 
@@ -2686,6 +2985,29 @@ def salvar_ou_carregar_dados(n_clicks, mes, plataforma, impressao, clique, orcam
 
     # Se nenhuma condição foi atendida, retornar os valores atuais
     return dash.no_update, impressao, clique, orcamento, ctr, cpl, resultados
+def carregar_dados_existentes(ano, mes, plataforma):
+    """
+    Carrega dados existentes do Firebase para uma determinada plataforma, mês e ano.
+    
+    Parâmetros:
+    - ano (int): Ano selecionado.
+    - mes (str): Mês selecionado.
+    - plataforma (str): Plataforma selecionada.
+    
+    Retorna:
+    - tuple: (impressao, clique, orcamento, ctr, cpl, resultados)
+    """
+    dados = db.child("desempenho").child(str(ano)).child(mes).child(plataforma).get().val()
+    if dados:
+        impressao = dados.get("Impressoes", 0)
+        clique = dados.get("Cliques_no_link", 0)
+        orcamento = dados.get("Orcamento", 0.0)
+        ctr = dados.get("CTR", 0.0)
+        cpl = dados.get("CPL", 0.0)
+        resultados = dados.get("Resultados", 0)
+        return impressao, clique, orcamento, ctr, cpl, resultados
+    else:
+        return None
 
 @app.callback(
     Output('tabela-desempenho', 'children'),
@@ -2769,118 +3091,194 @@ def atualizar_tabela_desempenho(mes_selecionado):
 
 
 # Adicionar logs para cada nível dos dados do Firebase
+
+@app.callback(
+    [Output('cliques-estado-container', 'children'),
+     Output('cliques-estado-erro-msg', 'children')],
+    [Input('cliques-estado-ano-dropdown', 'value'),
+     Input('cliques-estado-mes-dropdown', 'value')]
+)
+def atualizar_cliques_estado(ano_selecionado, mes_selecionado):
+    if not (ano_selecionado and mes_selecionado):
+        return [], "Por favor, selecione o ano e o mês para visualizar os cliques por estado."
+
+    try:
+        # Buscar os dados de cliques por estado do Firebase
+        dados_cliques = db.child("cliques_por_estado").child(str(ano_selecionado)).child(mes_selecionado).get().val()
+
+        if not dados_cliques:
+            return [], f"Nenhum dado de cliques encontrado para {mes_selecionado} de {ano_selecionado}."
+
+        # Transformar os dados em um DataFrame
+        import pandas as pd
+        df_cliques = pd.DataFrame(list(dados_cliques.items()), columns=['Estado', 'Cliques'])
+
+        # Verificar e converter os valores de 'Cliques' para inteiros
+        def converter_para_int(valor):
+            if isinstance(valor, dict):
+                # Extrair o valor necessário ou definir um padrão
+                # Ajuste conforme a estrutura real do seu dicionário
+                return 0
+            try:
+                return int(valor)
+            except (ValueError, TypeError):
+                return 0
+
+        df_cliques['Cliques'] = df_cliques['Cliques'].apply(converter_para_int)
+
+        # Filtrar estados com cliques > 0
+        df_cliques = df_cliques[df_cliques['Cliques'] > 0]
+
+        if df_cliques.empty:
+            return [], f"Nenhum clique registrado para {mes_selecionado} de {ano_selecionado}."
+
+        # Criar o gráfico de barras
+        fig = px.bar(
+            df_cliques,
+            x='Estado',
+            y='Cliques',
+            title=f"Clique por Estado - {mes_selecionado} de {ano_selecionado}",
+            labels={'Cliques': 'Número de Cliques', 'Estado': 'Estado'},
+            color='Cliques',
+            color_continuous_scale='Blues'
+        )
+
+        fig.update_layout(
+            plot_bgcolor=secondary_color,
+            paper_bgcolor=secondary_color,
+            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
+            title_x=0.5
+        )
+
+        fig.update_traces(texttemplate='%{y}', textposition='outside')
+
+        # Exibir o gráfico
+        grafico = dcc.Graph(figure=fig)
+
+        return grafico, ""
+
+    except Exception as e:
+        logging.error(f"Erro ao atualizar cliques_estado: {e}")
+        return [], f"Erro ao carregar os dados: {str(e)}"
 @app.callback(
     [Output('graficos-metricas', 'children'),
      Output('comentario-box', 'children'),
      Output('comentario-box', 'is_open')],
-    [Input('mes-comparacao-checklist', 'value')]
+    [Input('comparacao-ano-dropdown', 'value'),
+     Input('comparacao-mes-checklist', 'value')]
 )
-
-def update_graphs(meses_selecionados):
-    if not meses_selecionados:
+def atualizar_graficos_comparacao(ano_selecionado, meses_selecionados):
+    if not (ano_selecionado and meses_selecionados):
         return [], "", False
 
-    # Definir as métricas esperadas para o gráfico
-    metricas = ['Impressões', 'Cliques no link', 'Resultados', 'Orçamento (R$)', 'CTR (%)', 'CPL (R$)']
+    try:
+        # Inicializar estruturas para armazenar dados
+        dados = {
+            'Mês': [],
+            'Facebook Ads - Impressões': [],
+            'Facebook Ads - Cliques no link': [],
+            'Facebook Ads - Resultados': [],
+            'Facebook Ads - Orçamento': [],
+            'Facebook Ads - CTR (%)': [],
+            'Facebook Ads - CPL (R$)': [],
+            'Google Ads - Impressões': [],
+            'Google Ads - Cliques no link': [],
+            'Google Ads - Resultados': [],
+            'Google Ads - Orçamento': [],
+            'Google Ads - CTR (%)': [],
+            'Google Ads - CPL (R$)': [],
+        }
 
-    # Dicionário para armazenar os dados completos coletados do Firebase
-    dados_completos = {
-        'Plataforma': [],
-        'Mês': [],
-        'Impressões': [],
-        'Cliques no link': [],
-        'Resultados': [],
-        'Orçamento (R$)': [],
-        'CTR (%)': [],
-        'CPL (R$)': []
-    }
+        # Buscar dados para cada mês selecionado
+        for mes in meses_selecionados:
+            desempenho = db.child("desempenho").child(str(ano_selecionado)).child(mes).get().val()
+            dados['Mês'].append(mes)
 
-    # Buscar os dados do Firebase para cada mês selecionado
-    for mes in meses_selecionados:
-        try:
-            print(f"📅 Carregando dados para o mês: {mes}...")
-            dados_mes_firebase = db.child("desempenho").child(mes).get().val()
-            print(f"📊 Dados brutos para o mês {mes}: {dados_mes_firebase}")
+            for plataforma in ['Facebook Ads', 'Google Ads']:
+                plataforma_dados = desempenho.get(plataforma, {})
+                dados[f'{plataforma} - Impressões'].append(plataforma_dados.get('Impressoes', 0))
+                dados[f'{plataforma} - Cliques no link'].append(plataforma_dados.get('Cliques_no_link', 0))
+                dados[f'{plataforma} - Resultados'].append(plataforma_dados.get('Resultados', 0))
+                dados[f'{plataforma} - Orçamento'].append(plataforma_dados.get('Orcamento', 0))
+                dados[f'{plataforma} - CTR (%)'].append(plataforma_dados.get('CTR', 0))
+                dados[f'{plataforma} - CPL (R$)'].append(plataforma_dados.get('CPL', 0))
 
-            if not dados_mes_firebase:
-                print(f"⚠️  Não há dados para o mês {mes} no Firebase.")
-                continue  # Se não há dados, pular para o próximo mês
+        # Converter para DataFrame
+        df = pd.DataFrame(dados)
 
-            # Verificar a estrutura completa dos dados
-            print(f"🔍 Estrutura dos dados para {mes}: {dados_mes_firebase}")
+        # Criar gráficos comparativos
+        graficos = []
 
-            # Processar dados de cada plataforma (Facebook Ads e Google Ads)
-            for plataforma, dados in dados_mes_firebase.items():
-                print(f"➡️ Plataforma: {plataforma} encontrada.")
-                print(f"🔹 Dados brutos para {plataforma} no mês {mes}: {dados}")
-                # Adicionar mês e plataforma aos dados
-                dados_completos['Plataforma'].append(plataforma)
-                dados_completos['Mês'].append(mes)
+        # Exemplo: Gráfico de Impressões por Plataforma
+        for plataforma in ['Facebook Ads', 'Google Ads']:
+            graficos.append(
+                dcc.Graph(
+                    figure={
+                        'data': [
+                            go.Bar(
+                                x=df['Mês'],
+                                y=df[f'{plataforma} - Impressões'],
+                                name=f'{plataforma} - Impressões'
+                            ),
+                            go.Bar(
+                                x=df['Mês'],
+                                y=df[f'{plataforma} - Cliques no link'],
+                                name=f'{plataforma} - Cliques no link'
+                            ),
+                            go.Bar(
+                                x=df['Mês'],
+                                y=df[f'{plataforma} - Resultados'],
+                                name=f'{plataforma} - Resultados'
+                            ),
+                            go.Bar(
+                                x=df['Mês'],
+                                y=df[f'{plataforma} - Orçamento'],
+                                name=f'{plataforma} - Orçamento'
+                            ),
+                            go.Scatter(
+                                x=df['Mês'],
+                                y=df[f'{plataforma} - CTR (%)'],
+                                mode='lines+markers',
+                                name=f'{plataforma} - CTR (%)',
+                                yaxis='y2'
+                            ),
+                            go.Scatter(
+                                x=df['Mês'],
+                                y=df[f'{plataforma} - CPL (R$)'],
+                                mode='lines+markers',
+                                name=f'{plataforma} - CPL (R$)',
+                                yaxis='y3'
+                            )
+                        ],
+                        'layout': go.Layout(
+                            title=f'Métricas de {plataforma} - {ano_selecionado}',
+                            barmode='group',
+                            yaxis=dict(title='Quantidade'),
+                            yaxis2=dict(title='CTR (%)', overlaying='y', side='right'),
+                            yaxis3=dict(title='CPL (R$)', overlaying='y', side='right', anchor='free', position=0.95),
+                            legend=dict(x=1.05, y=1),
+                            margin={'l': 40, 'r': 100, 't': 40, 'b': 40},
+                            plot_bgcolor=secondary_color,
+                            paper_bgcolor=secondary_color,
+                            font=dict(family="Montserrat, sans-serif", size=12, color="#343a40"),
+                        )
+                    },
+                    style={'height': '600px'}
+                )
+            )
 
-                # Adicionar cada métrica específica, preenchendo com zero se estiver faltando
-                for metrica in metricas:
-                    chave_firebase = mapa_metricas_firebase.get(metrica, metrica)  # Usar o mapeamento atualizado
-                    valor = dados.get(chave_firebase, None)
+        # Opcional: Adicionar comentários baseados na seleção
+        comentario = ""
+        if 'Junho' in meses_selecionados:
+            comentario = "Junho teve um desempenho sólido nas campanhas de Facebook Ads."
 
-                    if valor is None:
-                        print(f"❓ Métrica '{chave_firebase}' não encontrada para '{plataforma}' no mês {mes}.")
-                        valor = 0  # Definir valor como 0 para métricas faltantes
+        is_open = bool(comentario)
 
-                    valor_final = valor if pd.notna(valor) else 0
-                    dados_completos[metrica].append(valor_final)
-                    print(f"🔢 Mês: {mes}, Plataforma: {plataforma}, Métrica: {metrica}, Valor: {valor_final}")
+        return graficos, comentario, is_open
 
-        except Exception as e:
-            print(f"⚠️  Erro ao buscar dados para o mês {mes}: {str(e)}")
-
-    # Converter os dados completos para um DataFrame
-    df_firebase = pd.DataFrame(dados_completos)
-
-    if df_firebase.empty:
-        print("⚠️ DataFrame vazio. Não há dados para exibir.")
-        return [], html.Div("Sem dados para os meses selecionados."), False
-
-    # Verificar se as colunas do DataFrame correspondem aos nomes esperados
-    print(f"🔍 Colunas do DataFrame: {df_firebase.columns}")
-    print(f"🔍 Dados do DataFrame:\n{df_firebase}")
-
-    graficos = []
-    for metrica in metricas:
-        df_plot = df_firebase[['Plataforma', 'Mês', metrica]].dropna()
-
-        if df_plot.empty:
-            print(f"⚠️ Sem dados para a métrica: {metrica} nos meses selecionados.")
-            continue
-
-        plataformas = ['Facebook Ads', 'Google Ads']
-        complete_data = pd.DataFrame([(plataforma, mes) for plataforma in plataformas for mes in meses_selecionados],
-                                     columns=['Plataforma', 'Mês'])
-        df_plot = complete_data.merge(df_plot, on=['Plataforma', 'Mês'], how='left').fillna(0)
-
-        fig = px.bar(
-            df_plot,
-            x='Mês',
-            y=metrica,
-            color='Plataforma',
-            barmode='group',
-            title=f"{metrica} - Comparação de Todos os Meses",
-            labels={metrica: metrica, 'Mês': 'Mês'},
-            height=300
-        )
-        fig.update_layout(
-    plot_bgcolor=secondary_color,  # Cor de fundo do gráfico
-    paper_bgcolor=secondary_color,  # Cor de fundo geral
-    font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),  # Fonte do gráfico
-    title_x=0.5
-        )
-        fig.update_traces(texttemplate='%{y:,}', textposition='outside', textfont_size=16)
-
-        graficos.append(html.Div([
-            html.H4(metrica, className="text-center", style={'color': primary_color, 'font-size': '24px'}),
-            dcc.Graph(figure=fig)
-        ], style={'margin-bottom': '30px'}))
-
-    return graficos, html.Div("No mês de Agosto tivemos uma alta em todas as métricas pelos eventos"), True
+    except Exception as e:
+        logging.error(f"Erro ao atualizar gráficos de comparação: {e}")
+        return [], f"Erro ao carregar os dados: {str(e)}", False
 
 
 
@@ -2915,15 +3313,132 @@ def update_cliques_pais(mes_selecionado):
 # Callback para atualizar a tabela de produtos com base no produto selecionado (/page-5)
 @app.callback(
     Output('tabela-produtos', 'children'),
-    [Input('produto-select-dropdown', 'value')]
+    [Input('produto-select-dropdown', 'value'),
+     Input('produto-ano-dropdown', 'value')]
 )
-def atualizar_tabela_produtos(produto_selecionado):
-    logging.info(f"Produto selecionado: {produto_selecionado}")
-    df_produto = df_produtos[df_produtos['Produto'] == produto_selecionado].copy()
-    logging.info(f"Dados filtrados para {produto_selecionado}:\n{df_produto}")
-    df_produto_formatado = formatar_valores(df_produto)
-    tabela = gerar_tabela(df_produto_formatado)
-    return tabela
+def atualizar_tabela_produtos(produto_selecionado, ano_selecionado):
+    if not produto_selecionado or not ano_selecionado:
+        return dbc.Alert("⚠️ Por favor, selecione um produto e um ano.", color="warning")
+    
+    try:
+        # Filtrar os dados com base no produto e ano selecionados
+        df_filtrado = df_produtos[
+            (df_produtos['Produto'] == produto_selecionado) & 
+            (df_produtos['Ano'] == ano_selecionado)
+        ].copy()
+        
+        if df_filtrado.empty:
+            return dbc.Alert(f"⚠️ Nenhum dado encontrado para {produto_selecionado} no ano {ano_selecionado}.", color="warning")
+        
+        # Criar a tabela Dash
+        tabela = dash_table.DataTable(
+            columns=[{"name": i, "id": i} for i in df_filtrado.columns],
+            data=df_filtrado.to_dict('records'),
+            style_table={'overflowX': 'auto', 'margin': 'auto', 'width': '80%'},
+            style_cell={
+                'textAlign': 'center',
+                'padding': '8px',
+                'font-family': 'Montserrat, sans-serif',
+                'fontSize': '16px'
+            },
+            style_header={
+                'backgroundColor': primary_color,
+                'fontWeight': 'bold',
+                'color': 'white',
+                'fontSize': '18px'
+            },
+            style_data={'backgroundColor': '#f9f9f9'},
+            style_data_conditional=[
+                {'if': {'row_index': 'odd'}, 'backgroundColor': '#e9e9e9'}
+            ],
+            sort_action="native",
+            filter_action="native",
+            page_action="native",
+            page_size=10,
+        )
+        
+        return tabela
+    except Exception as e:
+        logging.error(f"Erro ao atualizar a tabela de produtos: {e}")
+        return dbc.Alert(f"Erro ao carregar a tabela: {str(e)}", color="danger")
+
+def criar_grafico_tendencia(metrica_selecionada, anos_selecionados):
+    try:
+        logging.info(f"Gerando gráfico de tendência para a métrica: {metrica_selecionada}")
+        
+        # Buscar todos os meses disponíveis no Firebase para os anos selecionados
+        dados_desempenho = db.child("desempenho").get().val()
+        
+        if not dados_desempenho:
+            logging.warning("Nenhum dado encontrado em 'desempenho'.")
+            return px.line(title="Nenhum dado disponível.")
+        
+        # Lista para armazenar os dados para o gráfico
+        dados_para_grafico = {
+            'Ano': [],
+            'Mês': [],
+            'Valor': []
+        }
+        
+        # Iterar sobre cada ano e mês para coletar os dados
+        for ano in anos_selecionados:
+            anos_dados = dados_desempenho.get(str(ano), {})
+            for mes in meses_completos:
+                mes_dados = anos_dados.get(mes, {})
+                chave_firebase = mapa_metricas_firebase.get(metrica_selecionada, metrica_selecionada)
+                valor = mes_dados.get(chave_firebase, 0)
+                
+                # Converter valor para float se possível
+                try:
+                    valor = float(valor)
+                except (ValueError, TypeError):
+                    valor = 0.0
+                
+                dados_para_grafico['Ano'].append(ano)
+                dados_para_grafico['Mês'].append(mes)
+                dados_para_grafico['Valor'].append(valor)
+                logging.info(f"Ano: {ano}, Mês: {mes}, Valor: {valor}")
+        
+        # Criar DataFrame
+        df_grafico = pd.DataFrame(dados_para_grafico)
+        
+        # Ordenar os meses
+        meses_ordenados = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+        ]
+        df_grafico['Mês'] = pd.Categorical(df_grafico['Mês'], categories=meses_ordenados, ordered=True)
+        df_grafico.sort_values(['Ano', 'Mês'], inplace=True)
+        
+        # Criar coluna de data para ordenar no eixo X
+        df_grafico['Data'] = df_grafico.apply(lambda row: f"{row['Ano']}-{meses_ordenados.index(row['Mês']) + 1}", axis=1)
+        df_grafico['Data'] = pd.to_datetime(df_grafico['Data'], format='%Y-%m')
+        
+        # Criar o gráfico de linha
+        fig = px.line(
+            df_grafico,
+            x='Data',
+            y='Valor',
+            color='Ano',
+            title=f"Tendência de {metrica_selecionada} ao Longo dos Anos",
+            labels={'Valor': metrica_selecionada, 'Data': 'Data'},
+            markers=True,
+            height=500
+        )
+        
+        # Atualizar layout do gráfico
+        fig.update_layout(
+            plot_bgcolor=secondary_color,
+            paper_bgcolor=secondary_color,
+            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
+            title_x=0.5
+        )
+        
+        return fig
+    except Exception as e:
+        logging.error(f"Erro ao criar gráfico de tendência: {e}")
+        return px.line(title="Erro ao carregar os dados.")
+
 @app.callback(
     Output('grafico-media-totais', 'figure'),
     [Input('seletor-metrica-media', 'value')]
@@ -2950,6 +3465,7 @@ def update_grafico_media(metrica_selecionada):
             'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
             'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
         ]
+        
         
         # Definir o mapeamento para 'desempenho'
         mapa_metricas_desempenho = {
@@ -3044,47 +3560,51 @@ def update_grafico_media(metrica_selecionada):
 
   
 
-# Callback para atualizar o gráfico e a taxa de conversão no Funil de Vendas (/page-6)
 @app.callback(
     [Output('grafico-funil', 'figure'),
      Output('taxa-conversao', 'children')],
-    [Input('seletor-mes-funil', 'value')]
+    [Input('funil-ano-dropdown', 'value'),
+     Input('funil-mes-dropdown', 'value')]
 )
-def update_funil(mes_selecionado):
-    # Filtrar os dados para o mês selecionado
-    df_mes = df_funil[df_funil['Mês'] == mes_selecionado]
+def update_funil(ano_selecionado, mes_selecionado):
+    if not (ano_selecionado and mes_selecionado):
+        return px.bar(title="Selecione o ano e o mês para visualizar o funil de vendas."), "Taxa de Conversão: N/A"
     
-    if df_mes.empty or (df_mes[['Leads Frios', 'Atendidos', 'Vendas']].sum(axis=1).values[0] == 0):
-        fig = px.bar(title=f"Funil de Vendas - {mes_selecionado} (Sem dados)")
-        fig.update_layout(
-            plot_bgcolor=secondary_color,
-            paper_bgcolor=secondary_color,
-            font=dict(family="Montserrat, sans-serif", size=14, color="#343a40"),
-            title_x=0.5
-        )
-        taxa_conversao_text = "Taxa de Conversão: N/A"
-    else:
-        # Criar o gráfico de funil (barra horizontal) ordenado do maior para o menor
-        df_funil_plot = df_mes.melt(id_vars=['Mês'], var_name='Etapa', value_name='Quantidade')
-        etapas_order = ['Leads Frios', 'Atendidos', 'Vendas']  # Alterado de 'Conversões' para 'Vendas'
-        df_funil_plot['Etapa'] = pd.Categorical(df_funil_plot['Etapa'], categories=etapas_order, ordered=True)
-        df_funil_plot = df_funil_plot.sort_values('Etapa')
+    try:
+        # Buscar os dados do funil de vendas no Firebase
+        dados_funil = db.child("funil_vendas").child(str(ano_selecionado)).child(mes_selecionado).get().val()
         
-        # Definir cores para cada etapa
-        cores = {'Leads Frios': '#FFA07A', 'Atendidos': '#20B2AA', 'Vendas': '#3CB371'}  # Alterado
+        if not dados_funil:
+            return px.bar(title=f"Funil de Vendas - {mes_selecionado} de {ano_selecionado} (Sem dados)"), "Taxa de Conversão: N/A"
         
+        # Extrair os valores
+        leads_frios = dados_funil.get('Leads Frios', 0)
+        atendidos = dados_funil.get('Atendidos', 0)
+        vendas = dados_funil.get('Vendas', 0)
+        
+        # Calcular as taxas
+        taxa_atendimento = (atendidos / leads_frios) * 100 if leads_frios > 0 else 0.0
+        taxa_conversao = (vendas / atendidos) * 100 if atendidos > 0 else 0.0
+        
+        # Criar o DataFrame para o gráfico
+        df_funil_plot = pd.DataFrame({
+            'Etapa': ['Leads Frios', 'Atendidos', 'Vendas'],
+            'Quantidade': [leads_frios, atendidos, vendas]
+        })
+        
+        # Criar o gráfico de barras horizontais
         fig = px.bar(
             df_funil_plot,
             y='Etapa',
             x='Quantidade',
             orientation='h',
-            title=f"Funil de Vendas - {mes_selecionado}",
+            title=f"Funil de Vendas - {mes_selecionado} de {ano_selecionado}",
             labels={'Quantidade': 'Quantidade', 'Etapa': 'Etapa'},
             color='Etapa',
-            color_discrete_map=cores,
-            height=400,
-            text='Quantidade'  # Adiciona as quantidades sobre as barras
+            color_discrete_map={'Leads Frios': '#FFA07A', 'Atendidos': '#20B2AA', 'Vendas': '#3CB371'},
+            height=400
         )
+        
         fig.update_layout(
             plot_bgcolor=secondary_color,
             paper_bgcolor=secondary_color,
@@ -3092,28 +3612,19 @@ def update_funil(mes_selecionado):
             title_x=0.5
         )
         
-        fig.update_traces(textposition='auto')  # Ajusta a posição do texto
+        fig.update_traces(texttemplate='%{x}', textposition='auto')
         
-        # Calcular as Taxas de Cada Etapa
-        leads_frios = df_mes['Leads Frios'].values[0]
-        atendidos = df_mes['Atendidos'].values[0]
-        vendas = df_mes['Vendas'].values[0]
-        
-        taxa_atendimento = (atendidos / leads_frios) * 100 if leads_frios > 0 else 0.0
-        taxa_conversao = (vendas / atendidos) * 100 if atendidos > 0 else 0.0
-        
-        taxa_conversao_text = f"""
-        Taxa de Atendimento: {taxa_atendimento:.2f}% dos Leads Frios foram Atendidos.<br>
-        Taxa de Conversão: {taxa_conversao:.2f}% dos Atendidos foram Convertidos em Vendas.
-        """
-        
-        # Estilizar as taxas usando HTML
+        # Texto das taxas
         taxa_conversao_text = html.Div([
             html.P(f"Taxa de Atendimento: {taxa_atendimento:.2f}%", style={'font-size': '20px'}),
             html.P(f"Taxa de Conversão: {taxa_conversao:.2f}%", style={'font-size': '20px'})
         ], style={'font-weight': 'bold'})
+        
+        return fig, taxa_conversao_text
     
-    return fig, taxa_conversao_text
+    except Exception as e:
+        logging.error(f"Erro ao atualizar funil de vendas: {e}")
+        return px.bar(title="Erro ao carregar os dados."), "Taxa de Conversão: N/A"
 
 if __name__ == '__main__':
     app.run_server(debug=False, dev_tools_ui=False, host='0.0.0.0', port=8050)
